@@ -5,7 +5,7 @@
 I wanted to revisit X68000 **PANIC** animations after many years. I started building a PANIC player, and somehow it turned into a Web app!  
 This isn't intended to emulate the entire X68000. It's simply a convenient way to enjoy **PANIC** again. :)
 
-**▶ [Panic Player Web — Browser player](https://layer812.github.io/PanicPlayerWeb/)** (GitHub Pages deployment is being prepared)
+**▶ [Panic Player Web — Browser player](https://layer812.github.io/PanicPlayerWeb/)**
 
 Choose a `.PAN` file from your own computer and play it in your browser. **Locally selected PAN files are processed in the browser and are not uploaded to a server.** The application has no persistent PAN-storage feature, although your browser may use its normal temporary cache.
 
