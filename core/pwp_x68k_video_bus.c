@@ -14,6 +14,59 @@
 #define TVLEN 0x80000u
 #define CRTCBASE 0xe80000u
 #define PALBASE 0xe82000u
+/* FIX40: HD63450 DMAC channel 3, $E840C0..$E840FF (ADPCM channel).
+ * Register offsets, CSR/CER W1C and reset are derived from PX68K
+ * x68k/dmac.c and dmac.h. This is a register-only model: no DMA
+ * transfer, IRQ or PCM output is synthesized. STR/CNT fail closed.
+ * Copyright (c) 2026 Layer812. SPDX-License-Identifier: MIT (new glue only).
+ */
+#define DMAC3_BASE 0x00e840c0u
+#define DMAC3_END  0x00e84100u
+static uint8_t dmac3_regs[0x40u];
+static uint32_t dmac3_csr_reads, dmac3_write_count, dmac3_start_rejections;
+static int dmac3_valid(unsigned off) {
+    switch(off) {
+    case 0x00u: case 0x01u:
+    case 0x04u: case 0x05u: case 0x06u: case 0x07u:
+    case 0x0au: case 0x0bu: case 0x0cu: case 0x0du:
+    case 0x0eu: case 0x0fu:
+    case 0x14u: case 0x15u: case 0x16u: case 0x17u:
+    case 0x1au: case 0x1bu: case 0x1cu: case 0x1du:
+    case 0x1eu: case 0x1fu:
+    case 0x25u: case 0x27u: case 0x29u: case 0x2du:
+    case 0x31u: case 0x39u: case 0x3fu: return 1;
+    default: return 0; /* Reserved gaps are not blanket-emulated. */
+    }
+}
+static int dmac3_write(unsigned off,uint8_t value) {
+    if (!dmac3_valid(off))return 0;
+    if (off==0x07u) {
+        /* CCR STR bit7 requests transfer; CNT bit6 requests chaining.
+         * Neither is implementable without real DMA+ADPCM scheduling. */
+        if (value&0xc0u) {++dmac3_start_rejections;return 0;}
+        /* Bit4 SAB is a command and cannot latch in an idle CCR. */
+        dmac3_regs[off]=(uint8_t)(value&0x6fu);
+    } else if(off==0x00u) {
+        /* PX68K DMA_Write case 0: CSR W1C, preserve bit0/ACT bit3. */
+        dmac3_regs[off]&=(uint8_t)((uint8_t)~value | 0x09u);
+    } else if(off==0x01u) {
+        dmac3_regs[off]&=(uint8_t)~value; /* CER W1C */
+    } else if(off==0x0cu || off==0x14u || off==0x1cu) {
+        /* MAR/DAR/BAR are 24-bit; MSB write is ignored by PX68K. */
+    } else {
+        dmac3_regs[off]=value;
+    }
+    ++dmac3_write_count;
+    return 1;
+}
+uint32_t pwp_bus_dmac3_csr_reads(void){return dmac3_csr_reads;}
+uint32_t pwp_bus_dmac3_write_count(void){return dmac3_write_count;}
+uint32_t pwp_bus_dmac3_start_rejections(void){return dmac3_start_rejections;}
+#ifdef PWP_TEST_STAGE
+void pwp_bus_test_dmac3_status(uint8_t csr,uint8_t cer){
+    dmac3_regs[0]=csr;dmac3_regs[1]=cer;
+}
+#endif
 /* X68000 system port #4 ($E8E007): keyboard / NMI reset / dot clock.
  * MMIO is byte-wide at the odd address. Refer to MAME x68k sysport_r/w
  * and X68k/IOMAP. Reading bit3 reports a connected keyboard, whereas
@@ -79,6 +132,8 @@ static void bus_clear(void *ptr,size_t n) {
     for(size_t i=0;i<n;i++)p[i]=0;
 }
 void pwp_bus_reset(void) {
+    bus_clear(dmac3_regs,sizeof(dmac3_regs));
+    dmac3_csr_reads=dmac3_write_count=dmac3_start_rejections=0;
     bus_clear(gvram,sizeof(gvram));
     bus_clear(tvram,sizeof(tvram));
     bus_clear(crtc,sizeof(crtc));
@@ -295,6 +350,8 @@ uint32_t pwp_bus_graphics_display_enabled(void){return graphics_display_enabled;
 uint32_t pwp_bus_graphics_clear_count(void){return graphics_clears;}
 uint32_t pwp_bus_graphics_page(void){return graphics_access_page;}
 int pwp_bus_access8(uint32_t addr) {
+    if(addr>=DMAC3_BASE && addr<DMAC3_END)
+        return dmac3_valid((unsigned)(addr-DMAC3_BASE));
     if(addr==SYSPORT4_ADDRESS)return 1;
     if(addr==MFP_GPIP_ADDRESS || addr==MFP_IERB_ADDRESS ||
        addr==MFP_IPRB_ADDRESS || addr==MFP_ISRB_ADDRESS ||
@@ -315,6 +372,8 @@ int pwp_bus_access8(uint32_t addr) {
  * Preflight writes as well as reads; an invalid final byte must not
  * commit the earlier bytes of a word or longword write. */
 int pwp_bus_writable8(uint32_t addr) {
+    if(addr>=DMAC3_BASE && addr<DMAC3_END)
+        return dmac3_valid((unsigned)(addr-DMAC3_BASE));
     if (!pwp_bus_access8(addr) || addr == MFP_GPIP_ADDRESS) return 0;
     if (addr >= CRTCBASE && addr < 0xe80400u) return (addr & 0x3fu) < 0x30u;
     return 1;
@@ -374,6 +433,12 @@ static void gvwrite(uint32_t a, uint8_t data) {
 }
 int pwp_bus_read8(uint32_t addr, uint8_t *out) {
     if(!out || !pwp_bus_access8(addr))return 0;
+    if(addr>=DMAC3_BASE && addr<DMAC3_END) {
+        const unsigned off=(unsigned)(addr-DMAC3_BASE);
+        *out=dmac3_regs[off];
+        if(off==0u)++dmac3_csr_reads;
+        return 1;
+    }
     if(addr==SYSPORT4_ADDRESS){
         /* The guest can query keyboard presence independently of KEY CTRL.
          * No NMI / dot-clock side effect arises from this read. */
@@ -416,6 +481,8 @@ static void tvmask(uint32_t off,uint8_t value) {
 }
 int pwp_bus_write8(uint32_t addr,uint8_t value) {
     if(!pwp_bus_writable8(addr))return 0;
+    if(addr>=DMAC3_BASE && addr<DMAC3_END)
+        return dmac3_write((unsigned)(addr-DMAC3_BASE),value);
     if(addr==SYSPORT4_ADDRESS){
         /* Preserve documented control fields (KEY CTRL, NMI RESET, HRL).
          * No guest NMI input or variable dot-clock peripheral is modeled,
