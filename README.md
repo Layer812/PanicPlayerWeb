@@ -2,6 +2,10 @@
 
 [English](README_en.md)
 
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/fbe3ff29-31d5-474c-b982-f7ac94044503" alt="Panic Player WebでPANアニメーションを再生している画面" width="100%">
+</p>
+
 久しぶりにX68000の **PANIC** が見たくなり、PANIC Playerを作っていたら、いつの間にかWebアプリになりました。  
 X68000全体のエミュレータを目指すものではなく、あくまで **PANICを気軽に楽しめる環境**です :)
 
@@ -46,7 +50,7 @@ py -3 tools\START_PLAY.py --source "G:\X68KTab5" --pan "G:\MyPAN\example.PAN"
 - **Panic Player Webの新規コード**：© 2026 Layer812
 - **PANIC / `PANIC.X`**：原作者・著作権者 **永田英哉（pako／ぱこたん）さん**、V1.38改訂 **なしみさん**。原版の文書・条件を優先します
 - **Musashi**：© Karl Stenerudおよび貢献者（MIT License）
-- **PX68K / WinX68k / xkeropi**：X68000互換実装・資料整備に関わった開発者の皆様
+- **PX68K / WinX68k / xkeropi**: X68000エミュレータの開発・移植・調査に携わった皆様
 - **各 `.PAN` 作品**：映像・音楽・データの権利は各制作・権利者に帰属します
 - **SHARP X68000**：SHARPおよび各権利者の名称・商標。非公式・非公認の個人プロジェクトです
 
@@ -54,4 +58,4 @@ py -3 tools\START_PLAY.py --source "G:\X68KTab5" --pan "G:\MyPAN\example.PAN"
 
 本リポジトリのMITライセンスは、**Layer812が権利を持つ新規実装部分にのみ**適用され、第三者のコード・実行形式・各PANには拡張されません。
 
-X68000とPANICの文化を作り、守り、伝えてきた皆様に感謝します。
+PANICとX68000の文化を支え、貴重なデータを保存されてきた皆様に感謝します。
