@@ -1,7 +1,8 @@
 /* FIX43: HD63450 DMA3 single-block ADPCM bus-master path.
  * Copyright (c) 2026 Layer812. SPDX-License-Identifier: MIT.
  * PX68K x68k/dmac.c: exact tested DCR=80/OCR=32 or 4A/SCR=04 RAM->E92003 paths.
- * Timing: PX68K adpcm.c ADPCM_Clocks are sampleHz x 12; each DMA byte\n * holds 2 nibbles, so ADPCM_Clocks / 24 = DMA bytes per second;
+ * Timing: PX68K adpcm.c ADPCM_Clocks are sampleHz x 12; each DMA byte
+ * holds 2 nibbles, so ADPCM_Clocks / 24 = DMA bytes per second;
  * 16MHz guest CPU, no host-wall pacing or fabricated completion.
  * An unknown mode/address/IRQ is rejected, not treated as a successful DMA.
  * Included inside pwp_x68k_video_bus.c, after pwp_x68k_audio_hw.inc.
