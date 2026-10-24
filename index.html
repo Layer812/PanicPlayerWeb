@@ -18,6 +18,12 @@ See LICENSE, LICENSE_PANIC_X.txt and THIRD_PARTY_NOTICES.md.
   <meta name="description" content="PANIC PLAYER WEB: a standalone browser frontend for X68000 PAN animations. Actual Musashi 68000 and guest-visible screen updates.">
   <title>PANIC PLAYER WEB — CPU 16MHz</title>
   <link rel="stylesheet" href="./src/styles.css">
+  <style>
+    /* FIX39: compact top title; remains legible at 24px or above. */
+    .header {align-items:center;gap:12px;margin-bottom:12px;padding-bottom:8px}
+    .header h1 {font-size:clamp(24px,2.3vw,31px);line-height:1.15;margin:0;letter-spacing:-.035em}
+    .header .release span {margin-top:1px}
+  </style>
 </head>
 <body>
   <main class="app" id="app">
