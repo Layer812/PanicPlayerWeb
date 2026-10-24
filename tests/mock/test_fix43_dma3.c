@@ -29,6 +29,8 @@ int main(void){
  assert(pwp_bus_dma3_bytes_sent()==1);
  assert(rd(DMA+0x0b)==1 && rd(DMA+0x0f)==0x01);
  int32_t e=pwp_bus_sound_pop();
+ assert(e==0x8000); /* MSM6258 reset/play event */
+ e=pwp_bus_sound_pop();
  assert((e&255)==0x12 && ((e>>10)&7)==2u);
  assert(pwp_bus_sound_pop()==-1);
  assert(pwp_bus_dma3_step(4096,ram,sizeof(ram)));
