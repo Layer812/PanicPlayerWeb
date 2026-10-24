@@ -1,0 +1,115 @@
+# Panic Player Web — verified build and manually approved GitHub Pages deployment.
+# Copyright (c) 2026 Layer812. SPDX-License-Identifier: MIT (workflow only).
+# No build test -> no Pages artifact -> no deployment.
+name: Build and deploy Panic Player Web
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: panic-player-web-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout published source
+        uses: actions/checkout@v4
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Emscripten
+        uses: emscripten-core/setup-emsdk@v16
+        with:
+          version: '4.0.10'
+
+      - name: Verify development regressions
+        run: |
+          python -m pip install --disable-pip-version-check pytest
+          node --test tests/*.test.mjs
+          python -m pytest -q -p no:cacheprovider tests
+
+      - name: Checkout pinned authorized X68K Tab source
+        env:
+          X68KTAB_SHA: b8a5f29c747f4345060b32a34f190f9339d5b577
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/Layer812/X68KTab5.git _x68ktab
+          git -C _x68ktab sparse-checkout set src components/px68k/m68000/musashi
+          git -C _x68ktab fetch --depth 1 origin "$X68KTAB_SHA"
+          git -C _x68ktab checkout --detach "$X68KTAB_SHA"
+          test "$(git -C _x68ktab rev-parse HEAD)" = "$X68KTAB_SHA"
+          test -f _x68ktab/src/panic_x_bin.c
+          test -f _x68ktab/components/px68k/m68000/musashi/softfloat/README.txt
+
+      - name: Obtain original PANIC legal documentation
+        env:
+          PANIC_DOCS_REF: fbecf38c884d66d9d93f08f58210400cb4a34b86
+        run: |
+          mkdir -p _panic_docs
+          curl --fail --location --retry 3 --silent --show-error \
+            "https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/${PANIC_DOCS_REF}/docs/panic.doc" \
+            --output _panic_docs/panic.doc
+          curl --fail --location --retry 3 --silent --show-error \
+            "https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/${PANIC_DOCS_REF}/docs/panic.his" \
+            --output _panic_docs/panic.his
+          test -s _panic_docs/panic.doc
+          test -s _panic_docs/panic.his
+
+      - name: Compile and verify actual Musashi WASM and original PANIC.X
+        run: |
+          emcc --version
+          python tools/BUILD_R12_ACTUAL.py --x68ktab-root "$GITHUB_WORKSPACE/_x68ktab"
+          test -s core/pwp_musashi.mjs
+          test -s core/pwp_musashi.wasm
+          test -s core/PANIC.X
+
+      - name: Assemble minimal static site with license materials
+        run: |
+          python tools/BUILD_PAGES_SITE.py --root . --output _site --original-docs _panic_docs
+          test -f _site/index.html
+          test -f _site/src/main.js
+          test -f _site/core/pwp_musashi.mjs
+          test -f _site/core/pwp_musashi.wasm
+          test -f _site/core/PANIC.X
+          test -f _site/legal/Musashi_LICENSE.txt
+          test -f _site/legal/SoftFloat_README.txt
+          test -f _site/legal/panic.doc
+          test ! -e _site/tests
+          test ! -e _site/tools
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload verified site (never the whole source repo)
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy verified site to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
