@@ -41,10 +41,6 @@ Windowsでの開発用起動例：
 py -3 tools\START_PLAY.py --source "G:\X68KTab5" --pan "G:\MyPAN\example.PAN"
 ```
 
-**公開状況：** FIX39のソース、ビルドスクリプト、テスト一式はGitHubに掲載済みです。GitHub Pages用の実Musashi CPU WASMとオリジナルPANIC.Xはソース管理には含めず、手動実行の[Pagesワークフロー](.github/workflows/pages.yml)で生成・検証します。**すべての検証を通過した場合のみ、必要な実行ファイルと権利資料をPages用の配布物に含めます。** 現時点ではPagesの実稼働は未確認です。
-
-開発用の `tools/` はビルド・起動に必要です。`tests/` は回帰検証用、`docs/` は開発・参考資料用です。GitHubには残し、GitHub Pagesには公開に必要な実行ファイルだけを配置する予定です。
-
 ## 著作権・謝辞
 
 - **Panic Player Webの新規コード**：© 2026 Layer812
