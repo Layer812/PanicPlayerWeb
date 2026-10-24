@@ -43,6 +43,14 @@ uint32_t pwp_bus_dmac3_start_rejections(void);
 #ifdef PWP_TEST_STAGE
 void pwp_bus_test_dmac3_status(uint8_t csr,uint8_t cer);
 #endif
+/* FIX42: guest-clocked direct sound-register observation. No FM or DMA audio is fabricated. */
+void pwp_bus_audio_advance_cycles(uint32_t cycles);
+uint32_t pwp_bus_opm_busy_cycles(void);
+uint32_t pwp_bus_opm_status_reads(void);
+uint32_t pwp_bus_opm_ct_writes(void);
+uint32_t pwp_bus_adpcm_playing(void);
+uint32_t pwp_bus_pia_port_c(void);
+uint32_t pwp_bus_adpcm_control_writes(void);
 /* FIX41: read-only evidence of actual guest system/OPM port traffic. */
 uint32_t pwp_bus_sysport_contrast_writes(void);
 uint32_t pwp_bus_opm_latch(void);
