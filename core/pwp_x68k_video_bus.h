@@ -43,6 +43,11 @@ uint32_t pwp_bus_dmac3_start_rejections(void);
 #ifdef PWP_TEST_STAGE
 void pwp_bus_test_dmac3_status(uint8_t csr,uint8_t cer);
 #endif
+/* FIX41: read-only evidence of actual guest system/OPM port traffic. */
+uint32_t pwp_bus_sysport_contrast_writes(void);
+uint32_t pwp_bus_opm_latch(void);
+uint32_t pwp_bus_opm_address_writes(void);
+uint32_t pwp_bus_opm_data_rejections(void);
 int pwp_bus_access8(uint32_t address);
 /* Writeability preflight avoids half-committed multi-byte MMIO writes. */
 int pwp_bus_writable8(uint32_t address);

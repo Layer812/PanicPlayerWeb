@@ -71,7 +71,29 @@ void pwp_bus_test_dmac3_status(uint8_t csr,uint8_t cer){
  * MMIO is byte-wide at the odd address. Refer to MAME x68k sysport_r/w
  * and X68k/IOMAP. Reading bit3 reports a connected keyboard, whereas
  * writing bit3 controls keyboard transmission. They are NOT readback. */
-#define SYSPORT4_ADDRESS 0x00e8e007u
+/* FIX41: PX68K SysPort_Read/Write, x68k/sysport.c.  Contrast and
+ * monitor controls have honest readback, with no fabricated raster,
+ * palette, SRAM or keyboard events. Video analog contrast adjustment
+ * is not yet represented by this Web renderer. */
+#define SYSPORT_CONTRAST_ADDR 0x00e8e001u
+#define SYSPORT_MONITOR_ADDR  0x00e8e003u
+#define SYSPORT4_ADDRESS     0x00e8e007u
+#define SYSPORT_CPUTYPE_ADDR 0x00e8e00bu
+static uint8_t sysport_contrast,sysport_monitor;
+static uint32_t sysport_contrast_writes;
+/* YM2151/OPM: PX68K mem_wrap.c rm_opm reads zero for address latch at
+ * $E90001, and accepts register address there; data port $E90003
+ * requires a real OPM audio/IRQ core. STOP rather than silently drop
+ * a chip register write or return a fabricated busy/IRQ status. */
+#define OPM_ADDR_PORT 0x00e90001u
+#define OPM_DATA_PORT 0x00e90003u
+static uint8_t opm_register_latch;
+static uint32_t opm_address_writes,opm_data_rejections;
+uint32_t pwp_bus_opm_latch(void){return opm_register_latch;}
+uint32_t pwp_bus_opm_address_writes(void){return opm_address_writes;}
+uint32_t pwp_bus_opm_data_rejections(void){return opm_data_rejections;}
+uint32_t pwp_bus_sysport_contrast_writes(void){return sysport_contrast_writes;}
+
 static uint8_t sysport4_write_control;
 static uint8_t gvram[0x80000u];
 static uint8_t tvram[TVLEN];
@@ -155,6 +177,10 @@ void pwp_bus_reset(void) {
     mfp_gpip_reads=0;
     mfp_gpip4_active=1;  /* Power-on: active display phase. */
     sysport4_write_control=0u; /* no guest keyboard transmit enabled */
+    sysport_contrast=sysport_monitor=0u;
+    sysport_contrast_writes=0;
+    opm_register_latch=0;
+    opm_address_writes=opm_data_rejections=0;
 }
 /* _CRTMOD(10): 512x512 backing, 256x256 visible, 256 color, 2-page,
  * refresh 31kHz. IOCS CRTMOD clears only TEXT pages 0/1, not GVRAM.
@@ -350,6 +376,8 @@ uint32_t pwp_bus_graphics_display_enabled(void){return graphics_display_enabled;
 uint32_t pwp_bus_graphics_clear_count(void){return graphics_clears;}
 uint32_t pwp_bus_graphics_page(void){return graphics_access_page;}
 int pwp_bus_access8(uint32_t addr) {
+    if(addr==SYSPORT_CONTRAST_ADDR || addr==SYSPORT_MONITOR_ADDR ||
+       addr==SYSPORT_CPUTYPE_ADDR || addr==OPM_ADDR_PORT)return 1;
     if(addr>=DMAC3_BASE && addr<DMAC3_END)
         return dmac3_valid((unsigned)(addr-DMAC3_BASE));
     if(addr==SYSPORT4_ADDRESS)return 1;
@@ -372,6 +400,8 @@ int pwp_bus_access8(uint32_t addr) {
  * Preflight writes as well as reads; an invalid final byte must not
  * commit the earlier bytes of a word or longword write. */
 int pwp_bus_writable8(uint32_t addr) {
+    if(addr==SYSPORT_CPUTYPE_ADDR)return 0; /* ROM-defined CPU type */
+    if(addr==OPM_ADDR_PORT)return 1;
     if(addr>=DMAC3_BASE && addr<DMAC3_END)
         return dmac3_valid((unsigned)(addr-DMAC3_BASE));
     if (!pwp_bus_access8(addr) || addr == MFP_GPIP_ADDRESS) return 0;
@@ -433,6 +463,10 @@ static void gvwrite(uint32_t a, uint8_t data) {
 }
 int pwp_bus_read8(uint32_t addr, uint8_t *out) {
     if(!out || !pwp_bus_access8(addr))return 0;
+    if(addr==SYSPORT_CONTRAST_ADDR){*out=(uint8_t)(0xf0u|sysport_contrast);return 1;}
+    if(addr==SYSPORT_MONITOR_ADDR){*out=(uint8_t)(0xf0u|sysport_monitor);return 1;}
+    if(addr==SYSPORT_CPUTYPE_ADDR){*out=0xffu;return 1;} /* M68000 */
+    if(addr==OPM_ADDR_PORT){*out=0u;return 1;} /* PX68K rm_opm */
     if(addr>=DMAC3_BASE && addr<DMAC3_END) {
         const unsigned off=(unsigned)(addr-DMAC3_BASE);
         *out=dmac3_regs[off];
@@ -480,7 +514,24 @@ static void tvmask(uint32_t off,uint8_t value) {
     tvwrite(off,(uint8_t)((tvram[off]&mask)|(value&(uint8_t)~mask)));
 }
 int pwp_bus_write8(uint32_t addr,uint8_t value) {
-    if(!pwp_bus_writable8(addr))return 0;
+    if(!pwp_bus_writable8(addr)){
+        if(addr==OPM_DATA_PORT)++opm_data_rejections;
+        return 0;
+    }
+    if(addr==SYSPORT_CONTRAST_ADDR){
+        sysport_contrast=(uint8_t)(value&0x0fu);
+        ++sysport_contrast_writes;
+        return 1;
+    }
+    if(addr==SYSPORT_MONITOR_ADDR){
+        sysport_monitor=(uint8_t)(value&0x0bu);
+        return 1;
+    }
+    if(addr==OPM_ADDR_PORT){
+        opm_register_latch=value;
+        ++opm_address_writes;
+        return 1;
+    }
     if(addr>=DMAC3_BASE && addr<DMAC3_END)
         return dmac3_write((unsigned)(addr-DMAC3_BASE),value);
     if(addr==SYSPORT4_ADDRESS){
