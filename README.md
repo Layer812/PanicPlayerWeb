@@ -3,7 +3,7 @@
 [English](README_en.md)
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/fbe3ff29-31d5-474c-b982-f7ac94044503" alt="Panic Player WebでPANアニメーションを再生している画面" width="100%">
+  <img src="https://github.com/user-attachments/assets/3d593001-1acd-4781-b464-5166390b376e" alt="Panic Player WebでPANアニメーションを再生している画面" width="100%">
 </p>
 
 久しぶりにX68000の **PANIC** が見たくなり、PANIC Playerを作っていたら、いつの間にかWebアプリになりました。  
