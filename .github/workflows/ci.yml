@@ -29,3 +29,21 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check pytest
           python -m pytest -q -p no:cacheprovider tests
+      - name: Emscripten
+        uses: emscripten-core/setup-emsdk@v16
+        with:
+          version: '4.0.10'
+      - name: Checkout pinned X68K Tab read-only guest source
+        env:
+          X68KTAB_SHA: b8a5f29c747f4345060b32a34f190f9339d5b577
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/Layer812/X68KTab5.git _x68ktab
+          git -C _x68ktab sparse-checkout set src components/px68k/m68000/musashi
+          git -C _x68ktab fetch --depth 1 origin "$X68KTAB_SHA"
+          git -C _x68ktab checkout --detach "$X68KTAB_SHA"
+          test "$(git -C _x68ktab rev-parse HEAD)" = "$X68KTAB_SHA"
+      - name: Build actual Musashi and verify PANIC.X startup
+        run: |
+          python tools/BUILD_R12_ACTUAL.py --x68ktab-root "$GITHUB_WORKSPACE/_x68ktab"
+          test -s core/pwp_musashi.wasm
+          test -s core/PANIC.X
