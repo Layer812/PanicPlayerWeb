@@ -37,10 +37,6 @@ Windows development command:
 py -3 tools\START_PLAY.py --source "G:\X68KTab5" --pan "G:\MyPAN\example.PAN"
 ```
 
-**Publication status:** The full FIX39 source tree, tests, and build tools are now committed. Generated Musashi CPU WASM and original PANIC.X are not tracked in Git; the manually triggered [GitHub Pages workflow](.github/workflows/pages.yml) builds and checks them. Only after all verification gates pass are those runtime files and the original licensing notices included in the Pages deployment artifact. A live Pages playback test has not yet passed.
-
-The planned repository layout retains `tools/` for builds, `tests/` for regression testing, and `docs/` for development/source reference material. Only files needed to run the Web app should be deployed to GitHub Pages.
-
 ## Copyright and acknowledgments
 
 - **Original Panic Player Web code:** © 2026 Layer812
