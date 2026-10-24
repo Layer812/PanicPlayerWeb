@@ -1,0 +1,23 @@
+PANIC / panic.x V1.38 — license and redistribution information
+
+Original author and copyright holder:
+  Hideya Nagata (pako / ぱこたん / 永田英哉)
+V1.38 modifies V1.34 through the work of:
+  Nashimi (なしみ)
+
+The original author explicitly permitted PANIC/panic.x use, modification,
+redistribution and commercial use. The original document is authoritative;
+this text is an explanatory summary and does not replace or expand it.
+
+The author also said the conditions for individual .PAN data files depend on
+those files' creators. PANIC's redistribution permission does NOT grant
+permission to redistribute third-party animations, music or imagery.
+
+Historical documents:
+  https://github.com/Layer812/PanicPlayerTab5/tree/main/docs
+  http://retropc.net/x68000/software/movie/panic/panic/
+
+X68K Tab's earlier summary:
+  https://github.com/Layer812/X68KTab5/blob/main/LICENSE_PANIC_X.txt
+
+No original PANIC.X binary is distributed in this source repository.
