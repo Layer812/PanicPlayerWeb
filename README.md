@@ -9,7 +9,7 @@
 久しぶりにX68000の **PANIC** が見たくなり、PANIC Playerを作っていたら、いつの間にかWebアプリになりました。  
 X68000全体のエミュレータを目指すものではなく、あくまで **PANICを気軽に楽しめる環境**です :)
 
-**▶ [Panic Player Web — ブラウザ版](https://layer812.github.io/PanicPlayerWeb/)**（GitHub Pages 公開準備中）
+**▶ [Panic Player Web — ブラウザ版](https://layer812.github.io/PanicPlayerWeb/)**
 
 皆さんの手元にある `.PAN` ファイルを、ブラウザで選択して再生できます。**ローカルで選択したPANは外部のサーバーにアップロードされず、ブラウザ内で処理されます。** アプリ独自のPAN保存機能はありません。なお、ブラウザ自体の通常の一時キャッシュまで保証するものではありません。
 
