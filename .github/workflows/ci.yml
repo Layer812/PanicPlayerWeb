@@ -47,3 +47,11 @@ jobs:
           python tools/BUILD_R12_ACTUAL.py --x68ktab-root "$GITHUB_WORKSPACE/_x68ktab"
           test -s core/pwp_musashi.wasm
           test -s core/PANIC.X
+      - name: Upload private-replay-capable WASM (no PAN file or PANIC.X)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pwp-fix42-musashi-wasm
+          path: |
+            core/pwp_musashi.mjs
+            core/pwp_musashi.wasm
+          retention-days: 1
