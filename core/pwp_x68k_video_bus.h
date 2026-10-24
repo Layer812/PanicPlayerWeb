@@ -36,6 +36,13 @@ uint32_t pwp_bus_cynthia_active_sprites(void);
 uint32_t pwp_bus_graphics_display_enabled(void);
 uint32_t pwp_bus_graphics_clear_count(void);
 uint32_t pwp_bus_graphics_page(void);
+/* FIX40 DMA3 register diagnostics: no transfer/audio success implied. */
+uint32_t pwp_bus_dmac3_csr_reads(void);
+uint32_t pwp_bus_dmac3_write_count(void);
+uint32_t pwp_bus_dmac3_start_rejections(void);
+#ifdef PWP_TEST_STAGE
+void pwp_bus_test_dmac3_status(uint8_t csr,uint8_t cer);
+#endif
 int pwp_bus_access8(uint32_t address);
 /* Writeability preflight avoids half-committed multi-byte MMIO writes. */
 int pwp_bus_writable8(uint32_t address);
