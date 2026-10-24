@@ -13,6 +13,32 @@ static uint32_t pwp_opm_busy_remaining;
 static uint32_t pwp_opm_status_reads,pwp_opm_ct_writes,pwp_opm_busy_rejects;
 static uint32_t pwp_adpcm_control_writes,pwp_adpcm_data_rejects;
 static uint8_t pwp_opm_ct, pwp_adpcm_playing, pwp_pia_port_c;
+/* Audible byte FIFO preserves chronological PANIC.X PCM data and channel/rate
+ * for the host decoder; no synthetic ADPCM output or dropped bytes. */
+#define PWP_SOUND_FIFO_SIZE 8192u
+static uint16_t pwp_sound_fifo[PWP_SOUND_FIFO_SIZE];
+static uint32_t pwp_sound_read_pos,pwp_sound_write_pos,pwp_sound_bytes,pwp_sound_overflows;
+static uint32_t pwp_adpcm_sample_rate_index(void){
+    return (((pwp_opm_ct&2u)?4u:0u)|((pwp_pia_port_c>>2u)&3u));
+}
+static int pwp_sound_emit(uint8_t data){
+    if(!pwp_adpcm_playing)return 1; /* Real MSM6258 discards data when stopped. */
+    if(pwp_sound_write_pos-pwp_sound_read_pos >= PWP_SOUND_FIFO_SIZE){
+        ++pwp_sound_overflows;return 0;
+    }
+    const uint32_t rate=pwp_adpcm_sample_rate_index();
+    pwp_sound_fifo[pwp_sound_write_pos%PWP_SOUND_FIFO_SIZE] =
+        (uint16_t)(data|((pwp_pia_port_c&3u)<<8u)|(rate<<10u));
+    ++pwp_sound_write_pos;++pwp_sound_bytes;
+    return 1;
+}
+int32_t pwp_bus_sound_pop(void){
+    if(pwp_sound_read_pos==pwp_sound_write_pos)return -1;
+    return (int32_t)pwp_sound_fifo[(pwp_sound_read_pos++)%PWP_SOUND_FIFO_SIZE];
+}
+uint32_t pwp_bus_sound_bytes(void){return pwp_sound_bytes;}
+uint32_t pwp_bus_sound_overflows(void){return pwp_sound_overflows;}
+
 void pwp_bus_audio_advance_cycles(uint32_t cycles) {
     if(cycles >= pwp_opm_busy_remaining) pwp_opm_busy_remaining=0;
     else pwp_opm_busy_remaining-=cycles;
@@ -24,9 +50,10 @@ static void pwp_audio_reset(void) {
     pwp_opm_ct=0;
     pwp_adpcm_playing=0;
     pwp_pia_port_c=0x0bu; /* PX68K PIA_Init() */
+    pwp_sound_read_pos=pwp_sound_write_pos=pwp_sound_bytes=pwp_sound_overflows=0;
 }
 static int pwp_audio_access8(uint32_t addr) {
-    return addr==OPM_DATA_PORT || addr==PWP_ADPCM_CTRL ||
+    return addr==OPM_DATA_PORT || addr==PWP_ADPCM_CTRL || addr==PWP_ADPCM_DATA ||
            addr==PWP_PIA_C || addr==PWP_PIA_CONTROL;
 }
 static int pwp_audio_read8(uint32_t addr,uint8_t *value) {
@@ -37,6 +64,9 @@ static int pwp_audio_read8(uint32_t addr,uint8_t *value) {
         return 1;
       case PWP_ADPCM_CTRL:
         *value=(uint8_t)(pwp_adpcm_playing ? 0xc0u : 0x40u);
+        return 1;
+      case PWP_ADPCM_DATA:
+        *value=0; /* PX68K ADPCM_Read() */
         return 1;
       case PWP_PIA_C:
         *value=pwp_pia_port_c;
@@ -64,6 +94,9 @@ static int pwp_audio_write8(uint32_t addr,uint8_t value) {
         if(value&1u) pwp_adpcm_playing=0;
         else if(value&2u) pwp_adpcm_playing=1;
         ++pwp_adpcm_control_writes;
+        return 1;
+      case PWP_ADPCM_DATA:
+        if(!pwp_sound_emit(value)){++pwp_adpcm_data_rejects;return 0;}
         return 1;
       case PWP_PIA_C:
         /* PIA port C includes ADPCM pan/clock and joystick output pins.
