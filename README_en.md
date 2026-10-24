@@ -37,7 +37,7 @@ Windows development command:
 py -3 tools\START_PLAY.py --source "G:\X68KTab5" --pan "G:\MyPAN\example.PAN"
 ```
 
-**Publication status:** README, license materials and the Web HTML shell have been published first. The full FIX38 emulator/JS source, build scripts and tests are prepared for publication but **have not yet all been committed to GitHub**. The command above will work after the remaining source is published. Precompiled CPU WASM and PANIC.X are not bundled here.
+**Publication status:** The full FIX39 source tree, tests, and build tools are now committed. Generated Musashi CPU WASM and original PANIC.X are not tracked in Git; the manually triggered [GitHub Pages workflow](.github/workflows/pages.yml) builds and checks them. Only after all verification gates pass are those runtime files and the original licensing notices included in the Pages deployment artifact. A live Pages playback test has not yet passed.
 
 The planned repository layout retains `tools/` for builds, `tests/` for regression testing, and `docs/` for development/source reference material. Only files needed to run the Web app should be deployed to GitHub Pages.
 
