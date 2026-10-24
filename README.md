@@ -1,56 +1,57 @@
 # Panic Player Web
 
-> **公開状況（2026-10-24）:** README・著作権資料とWeb画面HTMLを先行登録しています。FIX38のC/JavaScriptソース、テスト、ビルドスクリプト一式は、検証済みの公開用ZIPとして準備済みですが、**GitHub上への一括登録はまだ完了していません**。公開用ZIP同梱の `PUBLISH_TO_GITHUB.cmd` で登録できます。ソース登録後、この暫定表示は置き換わります。
+[English](README_en.md)
 
+久しぶりにX68000の **PANIC** が見たくなり、PANIC Playerを作っていたら、いつの間にかWebアプリになりました。  
+X68000全体のエミュレータを目指すものではなく、あくまで **PANICを気軽に楽しめる環境**です :)
 
-[English / 英語](README_en.md) · [著作権・謝辞](THIRD_PARTY_NOTICES.md) · [X68K Tab](https://github.com/Layer812/X68KTab5) · [panicplayer for M5Stack Tab5](https://github.com/Layer812/PanicPlayerTab5)
+**▶ [Panic Player Web — ブラウザ版](https://layer812.github.io/PanicPlayerWeb/)**（GitHub Pages 公開準備中）
 
-**X68000のPANICアニメーション（`.PAN`）を、現代のWebブラウザで再生するための独立プロジェクトです。**
+皆さんの手元にある `.PAN` ファイルを、ブラウザで選択して再生できます。**ローカルで選択したPANは外部のサーバーにアップロードされず、ブラウザ内で処理されます。** アプリ独自のPAN保存機能はありません。なお、ブラウザ自体の通常の一時キャッシュまで保証するものではありません。
 
-昔のX68000で親しまれたPANICデータをまた見たい。そのため、オリジナルの **PANIC.X V1.38** を実際の **Musashi Motorola 68000** エミュレーションで実行するWebプレイヤーを開発しています。単に画像を切り替える代替プレイヤーではなく、当時のCPUプログラムとグラフィック・TEXT・スプライト/BG・ADPCMを再現する方針です。
+サンプルとして **[DENKO1.PAN（デンコちゃん）](pan/DENKO1.PAN)** も置きました。ブラウザのPAN一覧から選んで再生できます。
 
-[PanicPlayerTab5](https://github.com/Layer812/PanicPlayerTab5) と [X68K Tab](https://github.com/Layer812/X68KTab5) のPANIC再生への取り組みから生まれた、別のWeb実装です。
+このWeb版は [X68K Tab](https://github.com/Layer812/X68KTab5) をベースに開発しました。元となったM5Stack Tab5向けの [panicplayer](https://github.com/Layer812/PanicPlayerTab5) もご覧ください。
 
-## 機能（R16 FIX38）
+## 使い方
 
-- 本物のPANIC.Xを実Musashi 68000で実行
-- グラフィック・TEXT・スプライト/BG・パレットとR1表示優先順位
-- 16MHz設定の仮想CPU、V-DISP同期、遅延時の表示フレーム間引き
-- MSM6258 ADPCM再生
-- ローカルPANファイル／フォルダ読み込み
-- PLAY/STOP・PREV/NEXT・REPEAT・FOLDER AUTO
-- 折りたたみ式の診断表示
-- 公開リポジトリ `Layer812/PanicPlayerWeb` の `main/pan/` にある正当に公開されたPANだけを一覧化（本体はPLAY操作時のみ取得）
+1. PANICの再生画面で、**PANファイルを選択**するか、フォルダを選択します（ドラッグ＆ドロップも可能です）。
+2. **PLAY**で音声付き再生。**PREV / NEXT** は前後のファイルへ切り替えて再生します。
+3. **REPEAT**は同じ作品の繰り返し、**FOLDER AUTO**は一覧を順に再生して最後から先頭へ戻ります。
+4. 詳しい実行情報が必要な場合だけ、画面下部の「再生診断」を開いてください。
 
-## ソースコードと起動
+GitHubの `main/pan/` にあるサンプルについては、ファイル名の一覧だけを読み込み、ファイル本体は再生操作時に取得します。任意の外部URLを入力して再生する機能や、PANの共有URLを作る機能はありません。
 
-**ソースコード公開と、誰でもブラウザですぐ遊べるGitHub Pages公開は別です。** このプロジェクトでは、第三者の著作物を不用意に同梱しないよう、原版PANIC.Xと実Musashi CPU WASMを通常の公開ソースZIPには含めません。実際の再生には正当に入手した入力ファイルとEmscriptenによるローカルビルドが必要です。
+## ソースコードの使い方
 
-Windows開発環境の例（Python 3、Node.js 20+、Emscriptenが必要）:
+Web版の新規実装には **Musashiによる実68000エミュレーション**とオリジナルの **PANIC.X V1.38** を用いています。
+
+必要なもの：
+
+- Python 3、Node.js 20以降、Emscripten（`emcc`）
+- [X68K Tab](https://github.com/Layer812/X68KTab5) の正規ソース一式（Musashi実装と `src/panic_x_bin.c` を含むバージョン）、または同等の正当に入手した原資料
+
+Windowsでの開発用起動例：
 
 ```bat
 py -3 tools\START_PLAY.py --source "G:\X68KTab5" --pan "G:\MyPAN\example.PAN"
 ```
 
-ビルドは `tools/BUILD_R12_ACTUAL.py` を利用し、実PANIC.XのSHA-256を検証します。テストは `npm test` と `python -m pytest -q tests` です。すべてのPANへの互換性や正常終了はまだ保証しません。
+**公開状況：** 現在はREADME、権利資料、Web画面HTMLを先行公開しています。FIX38のエミュレータ本体・JavaScript・ビルドスクリプト・テスト一式は公開用パッケージとして整理済みですが、**GitHubへの一括登録は未完了**です。上記起動コマンドはソース一式の登録後に利用できます。また、完成済みのCPU WASMやPANIC.Xはこのリポジトリには含みません。
 
-## PANデータの権利
-
-PANIC本体の配布許諾は、個々のPAN作品（画像・音楽・動画）の再配布を許可するものではありません。作者・権利者から公開を認められたデータだけを `pan/` に置いてください。サンプルPANは含めません。
+開発用の `tools/` はビルド・起動に必要です。`tests/` は回帰検証用、`docs/` は開発・参考資料用です。GitHubには残し、GitHub Pagesには公開に必要な実行ファイルだけを配置する予定です。
 
 ## 著作権・謝辞
 
-- **Panic Player Webの新規Web実装**: © 2026 Layer812
-- **PANIC / PANIC.X**: 原作者・著作権者 **永田英哉（pako／ぱこたん）さん**、V1.38改訂 **なしみさん**
-- **Musashi**: © Karl Stenerud および貢献者、MITライセンス
-- **PX68K / WinX68k / xkeropi**: X68000エミュレータの開発・移植・調査に携わった皆様
-- **各PAN作品**: 作品ごとの制作・権利者
-- **SHARP X68000**: SHARPおよび各権利者の商標・権利。本プロジェクトは非公式・非公認です
+- **Panic Player Webの新規コード**：© 2026 Layer812
+- **PANIC / `PANIC.X`**：原作者・著作権者 **永田英哉（pako／ぱこたん）さん**、V1.38改訂 **なしみさん**。原版の文書・条件を優先します
+- **Musashi**：© Karl Stenerudおよび貢献者（MIT License）
+- **PX68K / WinX68k / xkeropi**：X68000互換実装・資料整備に関わった開発者の皆様
+- **各 `.PAN` 作品**：映像・音楽・データの権利は各制作・権利者に帰属します
+- **SHARP X68000**：SHARPおよび各権利者の名称・商標。非公式・非公認の個人プロジェクトです
 
-原PANICの配布条件と著作権は [PanicPlayerTab5の原資料](https://github.com/Layer812/PanicPlayerTab5/tree/main/docs) を参照してください。詳しくは [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)、[LICENSE_PANIC_X.txt](LICENSE_PANIC_X.txt)、[PANIC_V1.38_NOTICE.txt](PANIC_V1.38_NOTICE.txt)。
+**PANIC本体の配布許諾と、PANデータの配布許諾は別です。** 詳細・一次資料は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)、[LICENSE_PANIC_X.txt](LICENSE_PANIC_X.txt)、[PANIC_V1.38_NOTICE.txt](PANIC_V1.38_NOTICE.txt) を参照してください。PANICのオリジナル文書は [PanicPlayerTab5のdocs](https://github.com/Layer812/PanicPlayerTab5/tree/main/docs) に保存されています。
 
-**MITライセンスの適用範囲はLayer812が権利を持つ新規コード部分のみです。** 第三者コード、PANIC.X、PAN作品に一括適用しません。
+本リポジトリのMITライセンスは、**Layer812が権利を持つ新規実装部分にのみ**適用され、第三者のコード・実行形式・各PANには拡張されません。
 
----
-
-PANICとX68000の文化を支え、貴重なデータを保存されてきた皆様に感謝します。
+X68000とPANICの文化を作り、守り、伝えてきた皆様に感謝します。
