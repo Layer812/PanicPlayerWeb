@@ -1,0 +1,57 @@
+# Copyright (c) 2026 Layer812. SPDX-License-Identifier: MIT.
+# Regression-only CI; never writes firmware or deploys GitHub Pages.
+name: Panic Player Web regressions
+
+on:
+  push:
+    branches: [dev/fix42-real-sound-control]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify JavaScript regressions
+        run: node --test tests/*.test.mjs
+      - name: Verify native X68000 regressions
+        run: |
+          python -m pip install --disable-pip-version-check pytest
+          python -m pytest -q -p no:cacheprovider tests
+      - name: Emscripten
+        uses: emscripten-core/setup-emsdk@v16
+        with:
+          version: '4.0.10'
+      - name: Checkout pinned X68K Tab read-only guest source
+        env:
+          X68KTAB_SHA: b8a5f29c747f4345060b32a34f190f9339d5b577
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/Layer812/X68KTab5.git _x68ktab
+          git -C _x68ktab sparse-checkout set src components/px68k/m68000/musashi
+          git -C _x68ktab fetch --depth 1 origin "$X68KTAB_SHA"
+          git -C _x68ktab checkout --detach "$X68KTAB_SHA"
+          test "$(git -C _x68ktab rev-parse HEAD)" = "$X68KTAB_SHA"
+      - name: Build actual Musashi and verify PANIC.X startup
+        run: |
+          python tools/BUILD_R12_ACTUAL.py --x68ktab-root "$GITHUB_WORKSPACE/_x68ktab"
+          test -s core/pwp_musashi.wasm
+          test -s core/PANIC.X
+      - name: Upload private-replay-capable WASM (no PAN file or PANIC.X)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pwp-fix42-musashi-wasm
+          path: |
+            core/pwp_musashi.mjs
+            core/pwp_musashi.wasm
+          retention-days: 1

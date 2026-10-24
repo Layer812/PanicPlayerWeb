@@ -24,6 +24,8 @@
 #define DMAC3_END  0x00e84100u
 static uint8_t dmac3_regs[0x40u];
 static uint32_t dmac3_csr_reads, dmac3_write_count, dmac3_start_rejections;
+static int pwp_dma3_begin(uint8_t ccr);
+static void pwp_dma3_reset(void);
 static int dmac3_valid(unsigned off) {
     switch(off) {
     case 0x00u: case 0x01u:
@@ -41,9 +43,14 @@ static int dmac3_valid(unsigned off) {
 static int dmac3_write(unsigned off,uint8_t value) {
     if (!dmac3_valid(off))return 0;
     if (off==0x07u) {
-        /* CCR STR bit7 requests transfer; CNT bit6 requests chaining.
-         * Neither is implementable without real DMA+ADPCM scheduling. */
-        if (value&0xc0u) {++dmac3_start_rejections;return 0;}
+        /* FIX43: hardware DMA3 start is supported only for a verified
+         * RAM->MSM6258 single-block byte path. CNT/other shapes reject. */
+        if (value&0xc0u) {
+            if ((value&0x80u) && !(value&0x40u) && pwp_dma3_begin(value)) {
+                ++dmac3_write_count;return 1;
+            }
+            ++dmac3_start_rejections;return 0;
+        }
         /* Bit4 SAB is a command and cannot latch in an idle CCR. */
         dmac3_regs[off]=(uint8_t)(value&0x6fu);
     } else if(off==0x00u) {
@@ -89,6 +96,8 @@ static uint32_t sysport_contrast_writes;
 #define OPM_DATA_PORT 0x00e90003u
 static uint8_t opm_register_latch;
 static uint32_t opm_address_writes,opm_data_rejections;
+#include "pwp_x68k_audio_hw.inc"
+#include "pwp_x68k_dma3.inc"
 uint32_t pwp_bus_opm_latch(void){return opm_register_latch;}
 uint32_t pwp_bus_opm_address_writes(void){return opm_address_writes;}
 uint32_t pwp_bus_opm_data_rejections(void){return opm_data_rejections;}
@@ -181,6 +190,8 @@ void pwp_bus_reset(void) {
     sysport_contrast_writes=0;
     opm_register_latch=0;
     opm_address_writes=opm_data_rejections=0;
+    pwp_audio_reset();
+    pwp_dma3_reset();
 }
 /* _CRTMOD(10): 512x512 backing, 256x256 visible, 256 color, 2-page,
  * refresh 31kHz. IOCS CRTMOD clears only TEXT pages 0/1, not GVRAM.
@@ -378,6 +389,7 @@ uint32_t pwp_bus_graphics_page(void){return graphics_access_page;}
 int pwp_bus_access8(uint32_t addr) {
     if(addr==SYSPORT_CONTRAST_ADDR || addr==SYSPORT_MONITOR_ADDR ||
        addr==SYSPORT_CPUTYPE_ADDR || addr==OPM_ADDR_PORT)return 1;
+    if(pwp_audio_access8(addr))return 1;
     if(addr>=DMAC3_BASE && addr<DMAC3_END)
         return dmac3_valid((unsigned)(addr-DMAC3_BASE));
     if(addr==SYSPORT4_ADDRESS)return 1;
@@ -467,6 +479,7 @@ int pwp_bus_read8(uint32_t addr, uint8_t *out) {
     if(addr==SYSPORT_MONITOR_ADDR){*out=(uint8_t)(0xf0u|sysport_monitor);return 1;}
     if(addr==SYSPORT_CPUTYPE_ADDR){*out=0xffu;return 1;} /* M68000 */
     if(addr==OPM_ADDR_PORT){*out=0u;return 1;} /* PX68K rm_opm */
+    if(pwp_audio_access8(addr))return pwp_audio_read8(addr,out);
     if(addr>=DMAC3_BASE && addr<DMAC3_END) {
         const unsigned off=(unsigned)(addr-DMAC3_BASE);
         *out=dmac3_regs[off];
@@ -532,6 +545,7 @@ int pwp_bus_write8(uint32_t addr,uint8_t value) {
         ++opm_address_writes;
         return 1;
     }
+    if(pwp_audio_access8(addr))return pwp_audio_write8(addr,value);
     if(addr>=DMAC3_BASE && addr<DMAC3_END)
         return dmac3_write((unsigned)(addr-DMAC3_BASE),value);
     if(addr==SYSPORT4_ADDRESS){

@@ -27,7 +27,7 @@ int main(void){
  assert(pwp_bus_opm_latch()==0x14u);
  assert(pwp_bus_opm_address_writes()==1);
  assert(rd(0xe90001u)==0u); /* never echo latch in PX68K */
- assert(!pwp_bus_access8(0xe90003u)); /* needs real YM2151 status */
+ assert(rd(0xe90003u)==0u); /* FIX42: genuine idle OPM Busy status */
  assert(!pwp_bus_write8(0xe90003u,0x80u));
  assert(pwp_bus_opm_data_rejections()==1u);
  assert(!pwp_bus_access8(0xe90000u));

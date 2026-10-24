@@ -10,7 +10,7 @@
 import {verifyPanicX} from './hu-startup-probe.mjs';
 import {makeGuestClockLimiter, EMULATED_68000_HZ} from './guest-clock.mjs';
 import {matchMissingPalette0} from './pan-palette-evidence.mjs';
-import {decodeGuestADPCMChain} from './adpcm-msm6258.mjs';
+import {decodeGuestADPCMChain,decodeNibble6258} from './adpcm-msm6258.mjs';
 
 const REQUIRED = [
  '_pwp_mu_stage_ptr','_pwp_mu_stage_capacity','_pwp_mu_load',
@@ -139,6 +139,45 @@ export function createMusashiBridge(m, host, hu) {
   if (audioFns.some(name=>typeof m[name]!=='function') &&
       typeof m._pwp_mu_scanout_ticks==='function')
     throw new Error('FIX29 requires rebuilt real Musashi WASM with ADPCM exports');
+  /* FIX43: exact guest RAM/DMAC byte events, not pre-rendered PAN audio.
+   * Source clock comes from PX68K adpcm.c; 8255 pan is active-low. */
+  const directClocks=[93750,125000,187500,125000,46875,62500,93750,62500];
+  let directDecode={signal:0,index:0};
+  let directSamples=[],directRate=0,directBytes=0;
+  const flushDirectSound=()=>{
+    if(!directSamples.length)return;
+    host.audioFrames?.(Float32Array.from(directSamples),directRate,2);
+    host.guestAudio?.({kind:'MSM6258_DMA',rate:directRate,bytes:directBytes,
+      chains:0,samples:directSamples.length/2});
+    directSamples=[];directBytes=0;
+  };
+  const consumeDirectSound=()=>{
+    if(typeof m._pwp_mu_sound_pop!=='function')return;
+    for(let i=0;i<8192;i++){
+      const event=m._pwp_mu_sound_pop();
+      if(event===-1)break;
+      if(event&0x8000){
+        flushDirectSound();directDecode={signal:0,index:0};continue;
+      }
+      if(event&0x4000){
+        flushDirectSound();host.audioControl?.(0);continue;
+      }
+      const rateIndex=(event>>>10)&7,pan=(event>>>8)&3;
+      const sourceRate=directClocks[rateIndex]/24;
+      let factor=1;
+      while(sourceRate*factor<8000)factor*=2;
+      const rate=Math.round(sourceRate*factor);
+      if(directSamples.length && directRate!==rate)flushDirectSound();
+      directRate=rate;++directBytes;
+      const data=event&255;
+      for(const nib of [data&15,data>>>4]){
+        const amplitude=decodeNibble6258(directDecode,nib);
+        for(let n=0;n<factor;n++)
+          directSamples.push((pan&2)?0:amplitude,(pan&1)?0:amplitude);
+      }
+      if(directSamples.length>=2048)flushDirectSound();
+    }
+  };
   let lastAudioSerial=0;
   const consumeAudioEvent=()=>{
     if(typeof m._pwp_mu_audio_serial!=='function')return;
@@ -204,6 +243,11 @@ export function createMusashiBridge(m, host, hu) {
       paletteT0:typeof m._pwp_mu_video_palette_word==='function'?m._pwp_mu_video_palette_word(0,1):null,
       paletteEvidenceStatus,paletteEvidenceColor:paletteEvidenceOffset>=0?paletteEvidenceColor:null,paletteEvidenceOffset,
       adpcmControlCalls:optional('_pwp_mu_audio_control_calls'), adpcmChainCalls:optional('_pwp_mu_audio_chain_calls'),
+      adpcmDirectBytes:optional('_pwp_mu_sound_bytes'),adpcmQueueOverflows:optional('_pwp_mu_sound_overflows'),
+      dma3BytesSent:optional('_pwp_mu_dma3_bytes_sent'),dma3Completions:optional('_pwp_mu_dma3_completions'),
+      dma3Registers:typeof m._pwp_mu_dma3_register==='function'
+        ?Object.fromEntries([0,1,4,5,6,7,10,11,13,14,15,21,22,23].map(o=>
+          [o.toString(16).padStart(2,'0'),m._pwp_mu_dma3_register(o)])):null,
       conctrlCalls:optional('_pwp_mu_conctrl_calls'),conctrlMode:optional('_pwp_mu_conctrl_screen_mode'),
       clockStats:stats,measuredMHz,
       runtimeProfile:{cpuMs:profileCpuMs,pacerMs:profilePaceMs,
@@ -335,6 +379,7 @@ export function createMusashiBridge(m, host, hu) {
         // this throttles actual cycles even before the next scanout edge.
         const startCpu=clockMs();
         let result = m._pwp_mu_run(512);
+        consumeDirectSound();
         profileCpuMs+=Math.max(0,clockMs()-startCpu);
         profileSlices++;
         if (guestCycleClock){
@@ -355,7 +400,7 @@ export function createMusashiBridge(m, host, hu) {
           const op = m._pwp_mu_trap() >>> 0;
           const pc = m._pwp_mu_trap_pc() >>> 0;
           result = m._pwp_mu_dispatch();
-          if(result!==2 && result>=1)consumeAudioEvent();
+          if(result!==2 && result>=1){consumeAudioEvent();consumeDirectSound();}
           if (result === 2) {
             const fn=(op===0x4e4f)?` / IOCS D0.B=$${(m._pwp_mu_register(0)&0xff).toString(16).padStart(2,'0')}`:'';
             throw new Error(`Unsupported DOS/IOCS ${hex(op)}${fn} at PC ${hex(pc)}`);
@@ -389,6 +434,7 @@ export function createMusashiBridge(m, host, hu) {
           result = m._pwp_mu_supply_read(data.byteLength);
         }
         if (result === 4) {
+          flushDirectSound();
           sampleGuest('exit',`Guest process exit ${optional('_pwp_mu_exit_code')}`);
           // Process exits may precede the first modeled VBlank. Preserve the
           // final real guest screen only if there was never a visible frame.
@@ -447,6 +493,7 @@ export function createMusashiBridge(m, host, hu) {
         }
       }
     } catch (e) {
+      flushDirectSound();
       sampleGuest('exception',e instanceof Error?e.message:String(e));
       active = false;
       if (!stopped && session === runSession) host.error(e instanceof Error ? e.message : String(e));
@@ -498,6 +545,7 @@ export function createMusashiBridge(m, host, hu) {
       firstPaint = false; firstVisiblePaint = false; firstFrameNumber = 0;
       lastDiagnosticSample=0;
       lastAudioSerial=m._pwp_mu_audio_serial?.()>>>0 || 0;
+      directDecode={signal:0,index:0};directSamples=[];directRate=0;directBytes=0;
       stopped = false;
     },
     async start() {

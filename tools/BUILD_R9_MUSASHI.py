@@ -31,6 +31,8 @@ EXPORTS=[
  'pwp_mu_iocs_tgusemd_calls','pwp_mu_iocs_graphics_use','pwp_mu_iocs_text_use','pwp_mu_iocs_last_d1','pwp_mu_iocs_last_d2',
  'pwp_mu_iocs_ms_init_calls','pwp_mu_mouse_initialized','pwp_mu_mouse_cursor_visible',
  'pwp_mu_iocs_gclr_calls','pwp_mu_iocs_sp_init_calls','pwp_mu_iocs_sp_on_calls','pwp_mu_sprite_initialized','pwp_mu_sprite_display_enabled','pwp_mu_sprite_init_count','pwp_mu_sprite_enable_count','pwp_mu_cynthia_active_sprites','pwp_mu_cynthia_disp_gate','pwp_mu_cynthia_raw_sprite_count','pwp_mu_cynthia_attr_writes','pwp_mu_cynthia_pcg_writes','pwp_mu_cynthia_palette_writes','pwp_mu_graphics_display_enabled','pwp_mu_graphics_clear_count','pwp_mu_graphics_access_page','pwp_mu_iocs_crtmod_calls','pwp_mu_iocs_crt_mode',
+ 'pwp_mu_sound_pop','pwp_mu_sound_bytes','pwp_mu_sound_overflows',
+ 'pwp_mu_dma3_bytes_sent','pwp_mu_dma3_completions','pwp_mu_dma3_register',
  'pwp_mu_audio_serial','pwp_mu_audio_kind','pwp_mu_audio_chain_addr','pwp_mu_audio_chain_count','pwp_mu_audio_mode','pwp_mu_audio_ram_ptr','pwp_mu_audio_control_calls','pwp_mu_audio_chain_calls',
  'pwp_mu_conctrl_calls','pwp_mu_conctrl_screen_mode','pwp_mu_conctrl_fnkeys_mode','pwp_mu_conctrl_cursor_visible',
  'pwp_frame_render','pwp_frame_render_mode10','pwp_frame_pointer','pwp_frame_size','pwp_frame_grb8888','pwp_frame_set_palette0_evidence','pwp_frame_gfx_nonzero','pwp_frame_text_nonzero','pwp_frame_gfx_text_overlap','pwp_frame_gfx_palette_zero','pwp_frame_gfx_visible_pixels','pwp_frame_text_visible_pixels']
