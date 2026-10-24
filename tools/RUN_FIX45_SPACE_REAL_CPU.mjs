@@ -47,10 +47,6 @@ for(let i=0;i<500 && completed<want.length;i++){
  const e=want[completed];
  assert.equal(m._pwp_mu_trap(),e.op,'call '+completed);
  if(completed===1){assert.equal(m._pwp_mu_pending_space(),1);}
- if(completed===3){
-   assert.equal(m._pwp_mu_queue_space(),1);
-   assert.equal(m._pwp_mu_pending_space(),1);
- }
  assert.equal(m._pwp_mu_dispatch(),1);
  assert.equal(m._pwp_mu_register(0)>>>0,e.value,'DOS D0 call '+completed);
  ++completed;
@@ -59,6 +55,12 @@ for(let i=0;i<500 && completed<want.length;i++){
    assert.equal(m._pwp_mu_pending_space(),1);
  }
  if(completed===2)assert.equal(m._pwp_mu_pending_space(),0);
+ if(completed===3) {
+   /* A real browser key event arrives BETWEEN CPU slices, not while
+    * the synchronous DOS dispatch has suspended the guest in state 2. */
+   assert.equal(m._pwp_mu_queue_space(),1);
+   assert.equal(m._pwp_mu_pending_space(),1);
+ }
  if(completed===4)assert.equal(m._pwp_mu_pending_space(),0);
 }
 assert.equal(completed,5,'all authentic guest DOS calls executed');
