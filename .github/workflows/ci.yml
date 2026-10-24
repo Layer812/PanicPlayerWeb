@@ -1,0 +1,31 @@
+# Copyright (c) 2026 Layer812. SPDX-License-Identifier: MIT.
+# Regression-only CI; never writes firmware or deploys GitHub Pages.
+name: Panic Player Web regressions
+
+on:
+  push:
+    branches: [dev/fix42-real-sound-control]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify JavaScript regressions
+        run: node --test tests/*.test.mjs
+      - name: Verify native X68000 regressions
+        run: |
+          python -m pip install --disable-pip-version-check pytest
+          python -m pytest -q -p no:cacheprovider tests
