@@ -1,6 +1,6 @@
 /* FIX43: HD63450 DMA3 single-block ADPCM bus-master path.
  * Copyright (c) 2026 Layer812. SPDX-License-Identifier: MIT.
- * PX68K x68k/dmac.c: exact tested DCR=80/OCR=32/SCR=04 RAM->E92003 path.
+ * PX68K x68k/dmac.c: exact tested DCR=80/OCR=32 or 4A/SCR=04 RAM->E92003 paths.
  * Timing: PX68K adpcm.c 4MHz-derived ADPCM_Clocks / 48 = DMA bytes/second;
  * 16MHz guest CPU, no host-wall pacing or fabricated completion.
  * An unknown mode/address/IRQ is rejected, not treated as a successful DMA.
@@ -34,14 +34,35 @@ static void pwp_dma3_reset(void){
     pwp_dma3_clock_phase=0;pwp_dma3_last_fault=0;
     pwp_dma3_bytes_sent=pwp_dma3_completions=0;pwp_dma3_first_pending=0;
 }
+/* PX68K array-chain descriptor: big-endian {MAR.L, MTC.W}.
+ * BAR points to the current descriptor and BTC counts remaining blocks. */
+static int pwp_dma3_load_array(const uint8_t *ram,uint32_t size){
+    uint32_t bar=pwp_dma3_read24(0x1cu);
+    if(!pwp_dma3_read16(0x1au) || bar>=size || size-bar<6u){
+        pwp_dma3_last_fault=bar;return 0;
+    }
+    const uint32_t mar=(((uint32_t)ram[bar+1u])<<16u)|
+                       (((uint32_t)ram[bar+2u])<<8u)|ram[bar+3u];
+    const uint32_t mtc=((uint32_t)ram[bar+4u]<<8u)|ram[bar+5u];
+    if(!mtc || mar>=size || mtc>size-mar){
+        pwp_dma3_last_fault=!mtc?bar+4u:mar;
+        return 0;
+    }
+    pwp_dma3_write24(0x0cu,mar);
+    pwp_dma3_write16(0x0au,mtc);
+    pwp_dma3_write24(0x1cu,bar+6u);
+    return 1;
+}
 static int pwp_dma3_begin(uint8_t ccr){
     /* No interrupt/chain IRQ simulation: unsupported requests fail closed. */
     if((ccr&0x48u) || dmac3_regs[0x00u]&0xf8u ||
        dmac3_regs[0x04u]!=0x80u ||
-       dmac3_regs[0x05u]!=0x32u ||
+       (dmac3_regs[0x05u]!=0x32u && dmac3_regs[0x05u]!=0x4au) ||
        dmac3_regs[0x06u]!=0x04u ||
        pwp_dma3_read24(0x14u)!=PWP_ADPCM_DATA ||
-       pwp_dma3_read16(0x0au)==0u) return 0;
+       (dmac3_regs[0x05u]==0x32u && !pwp_dma3_read16(0x0au)) ||
+       (dmac3_regs[0x05u]==0x4au &&
+        (!pwp_dma3_read16(0x1au) || !pwp_dma3_read24(0x1cu))))return 0;
     dmac3_regs[0x07u]=(uint8_t)((ccr&0x2fu)|0x80u);
     dmac3_regs[0x00u]|=0x08u; /* CSR ACT */
     dmac3_regs[0x01u]=0;       /* CER cleared on valid start */
@@ -64,8 +85,13 @@ static int pwp_dma3_send_byte(const uint8_t *ram,uint32_t size){
     pwp_dma3_write16(0x0au,mtc-1u);
     ++pwp_dma3_bytes_sent;
     if(mtc==1u){
+        if(dmac3_regs[0x05u]==0x4au){
+            const uint32_t btc=pwp_dma3_read16(0x1au);
+            pwp_dma3_write16(0x1au,btc-1u);
+            if(btc>1u) return pwp_dma3_load_array(ram,size);
+        }
         dmac3_regs[0x00u]=(uint8_t)((dmac3_regs[0x00u]&0xf7u)|0x80u);
-        /* The HD63450 CCR STR bit remains set until guest reset/abort. */
+        /* HD63450 CSR COC=1, ACT=0; source bytes were genuinely consumed. */
         ++pwp_dma3_completions;
     }
     return 1;
@@ -75,6 +101,8 @@ int pwp_bus_dma3_step(uint32_t cycles,const uint8_t *ram,uint32_t ram_size){
     if(!ram || !ram_size)return 0;
     if(pwp_dma3_first_pending){
         pwp_dma3_first_pending=0;
+        if(dmac3_regs[0x05u]==0x4au && !pwp_dma3_load_array(ram,ram_size))
+            return 0;
         if(!pwp_dma3_send_byte(ram,ram_size))return 0;
     }
     if(!(dmac3_regs[0x00u]&0x08u))return 1;
