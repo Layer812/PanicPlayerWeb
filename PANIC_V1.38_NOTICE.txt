@@ -1,0 +1,15 @@
+PANIC / panic.x V1.38 — original author attribution
+
+PANIC: Hideya Nagata (pako / ぱこたん / 永田英哉).
+V1.38: modifications by Nashimi (なしみ), based on the author's V1.34.
+
+The original PANIC documentation broadly permits use, modification, copying,
+redistribution and commercial use. Original instructions are authoritative.
+PAN data copyright/redistribution is separately held by each data creator.
+
+The Web source bundle does not redistribute PANIC.X.
+The original documentation remains available here:
+https://github.com/Layer812/PanicPlayerTab5/tree/main/docs
+
+The original site:
+http://retropc.net/x68000/software/movie/panic/panic/
