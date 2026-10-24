@@ -134,7 +134,7 @@ export function createMusashiBridge(m, host, hu) {
   // A single IOCS call may be emitted repeatedly; keep exact event identity.
   // Legacy fake CPU fixtures are allowed to omit the audio exports, but an
   // actual rebuilt FIX29 core must expose ALL eight functions below.
-  if(typeof m._pwp_mu_scanout_ticks==='function' &&
+  if(typeof m._pwp_mu_dma3_bytes_sent==='function' &&
      typeof m._pwp_mu_queue_space!=='function')
     throw new Error('FIX45 requires genuine Musashi guest keyboard input export');
   const audioFns=['_pwp_mu_audio_serial','_pwp_mu_audio_kind','_pwp_mu_audio_chain_addr',
