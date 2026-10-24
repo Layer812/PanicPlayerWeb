@@ -21,6 +21,14 @@ static uint32_t pwp_sound_read_pos,pwp_sound_write_pos,pwp_sound_bytes,pwp_sound
 static uint32_t pwp_adpcm_sample_rate_index(void){
     return (((pwp_opm_ct&2u)?4u:0u)|((pwp_pia_port_c>>2u)&3u));
 }
+static int pwp_sound_marker(uint16_t tag){
+    if(pwp_sound_write_pos-pwp_sound_read_pos >= PWP_SOUND_FIFO_SIZE){
+        ++pwp_sound_overflows;return 0;
+    }
+    pwp_sound_fifo[pwp_sound_write_pos%PWP_SOUND_FIFO_SIZE]=tag;
+    ++pwp_sound_write_pos;
+    return 1;
+}
 static int pwp_sound_emit(uint8_t data){
     if(!pwp_adpcm_playing)return 1; /* Real MSM6258 discards data when stopped. */
     if(pwp_sound_write_pos-pwp_sound_read_pos >= PWP_SOUND_FIFO_SIZE){
@@ -91,8 +99,13 @@ static int pwp_audio_write8(uint32_t addr,uint8_t value) {
         return 1;
       case PWP_ADPCM_CTRL:
         /* Real MSM6258 control: RESET bit0 dominates PLAY bit1. */
-        if(value&1u) pwp_adpcm_playing=0;
-        else if(value&2u) pwp_adpcm_playing=1;
+        if(value&1u){
+            if(pwp_adpcm_playing && !pwp_sound_marker(0x4000u))return 0;
+            pwp_adpcm_playing=0;
+        }else if(value&2u){
+            if(!pwp_adpcm_playing && !pwp_sound_marker(0x8000u))return 0;
+            pwp_adpcm_playing=1;
+        }
         ++pwp_adpcm_control_writes;
         return 1;
       case PWP_ADPCM_DATA:
