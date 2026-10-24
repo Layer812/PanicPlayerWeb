@@ -1,0 +1,18 @@
+# Never commit private or third-party media implicitly
+*.PAN
+*.pan
+*.xdf
+*.XDF
+*.DIM
+*.HDS
+*.ROM
+*.DAT
+core/PANIC.X
+core/pwp_musashi.mjs
+core/pwp_musashi.wasm
+vendor/
+__pycache__/
+*.pyc
+node_modules/
+FIX25_BUILD_FINGERPRINT.json
+R12_REAL_CPU_MANIFEST.json
