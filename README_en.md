@@ -18,6 +18,7 @@ Panic Player Web was developed based on [X68K Tab](https://github.com/Layer812/X
 1. Choose PAN files or a folder, or drag a file into the library.
 2. Use **PLAY** to play with audio. **PREV/NEXT** switches tracks and begins playback.
 3. **REPEAT** loops the same track. **FOLDER AUTO** plays the library sequentially and wraps to the start.
+   During playback, press **Space** to send a real SPACE key to PANIC.X. This advances media that wait for a SPACE keystroke.
 4. Open the collapsible playback diagnostics only if needed.
 
 Files from this repository's `main/pan/` are listed by name and fetched only after playback is requested. Arbitrary URL playback and shared PAN URLs are not supported.

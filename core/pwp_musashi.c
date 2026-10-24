@@ -91,7 +91,6 @@ static uint32_t size_image, size_bss, guest_steps, blocked_at, fault_addr;
 static uint16_t blocked_op;
 /* 0 reset; 1 active; 2 pending DOS/IOCS trap; 3 host read pending;
  * 4 normal process exit; negative failure */
-static int32_t state;
 #define PWP_PAN_HANDLE 5u
 #define PWP_IO_CHUNK 65536u
 #define PWP_MAX_BLOCKS 128u
@@ -115,7 +114,23 @@ static uint32_t alloc_count;
 #define PWP_CONSOLE_CAP 8192u
 static uint8_t console_bytes[PWP_CONSOLE_CAP];
 static uint32_t console_length, console_truncated;
+static int32_t state;
 static uint16_t process_exit_code;
+/* FIX45: The genuine PANIC.X uses DOS _INPOUT ($FF06, CODE=$00FF) for
+ * nonblocking keyboard input. Host SPACE arrives as one ASCII $20 keystroke.
+ * Human68k keyboard data is queued here, not written into PANIC.X memory
+ * or synthesized as an IOCS/hardware interrupt. */
+#define PWP_SPACE_QUEUE_LIMIT 16u
+static uint32_t pwp_space_queued, pwp_space_consumed, pwp_space_rejected;
+uint32_t pwp_mu_queue_space(void) {
+  if(state!=1) { ++pwp_space_rejected;return 0; }
+  if(pwp_space_queued>=PWP_SPACE_QUEUE_LIMIT){++pwp_space_rejected;return 0;}
+  ++pwp_space_queued;return 1;
+}
+uint32_t pwp_mu_pending_space(void){return pwp_space_queued;}
+uint32_t pwp_mu_consumed_space(void){return pwp_space_consumed;}
+uint32_t pwp_mu_rejected_space(void){return pwp_space_rejected;}
+
 /* Extended vectors are recorded for get/set symmetry. No IOCS/DOS handler
  * is invoked merely because a vector is installed: the actual hardware
  * service must eventually be provided by the complete guest runtime. */
@@ -263,6 +278,7 @@ void pwp_mu_reset(void) {
   io_dst=io_total=io_done=io_chunk=alloc_count=0;
   memset(allocs,0,sizeof allocs);
   console_length=console_truncated=process_exit_code=0;
+  pwp_space_queued=pwp_space_consumed=pwp_space_rejected=0;
   memset(console_bytes,0,sizeof console_bytes);
   memset(iocs_vectors,0,sizeof iocs_vectors);
   memset(dos_vectors,0,sizeof dos_vectors);
@@ -788,7 +804,19 @@ int32_t pwp_mu_dispatch(void) {
       pan_open=0; pan_pos=0;
       state=4;
       break;
-    case 0xff0c: { /* _KFLUSH: keyboard buffer clear, bounded subset. */
+    case 0xff06: { /* Human68k _INPOUT: FF = nonblocking key input. */
+      if((sp&1u)||!within(sp,2))return state=-8;
+      const uint16_t code=u16(ram+sp);
+      /* PANIC.X V1.38 polls FF06(CODE=$FF) in its own real 68000 code,
+       * comparing D0 to the PAN schedule's expected key.  A single
+       * SPACE press produces one $20 byte, then the next poll returns 0. */
+      if(code!=0x00ffu)break; /* Unsupported console output modes fail closed. */
+      const uint32_t c=pwp_space_queued?0x20u:0u;
+      if(pwp_space_queued){--pwp_space_queued;++pwp_space_consumed;}
+      complete_dos((int32_t)c);
+      break;
+    }
+    case 0xff0c: { /* _KFLUSH: flush pending keyboard input. */
       if (!within(sp,2)) return state=-8;
       const uint16_t mode=u16(ram+sp);
       /* Only the no-input operations are implemented: this runtime has no
@@ -798,10 +826,10 @@ int32_t pwp_mu_dispatch(void) {
        * exact observed six-byte shape rather than accepting all modes.
        * Modes 1/7/8/10 block for actual keyboard input and must NOT
        * be reported as successful while input is unimplemented. */
-      if (mode==0xffffu) { complete_dos(0); break; }
+      if (mode==0xffffu) { pwp_space_queued=0;complete_dos(0); break; }
       if (mode==0x00ffu) {
         if(!within(sp,6)) return state=-8;
-        if(u32(ram+sp+2)==0u) complete_dos(0);
+        if(u32(ram+sp+2)==0u){pwp_space_queued=0;complete_dos(0);}
         break; /* Unknown $00FF shapes remain unsupported. */
       }
       if (mode==6u) {

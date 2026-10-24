@@ -131,6 +131,7 @@ def compile_and_test(opts, source, x):
         invoke([node,ROOT/'tools'/'RUN_R16_FIX7_MSINIT_CPU.mjs',out,x])
         invoke([node,ROOT/'tools'/'RUN_R16_FIX8_NAMECK_CPU.mjs',out,x])
         invoke([node,ROOT/'tools'/'RUN_R16_FIX9_CONCTRL_CPU.mjs',out])
+        invoke([node,ROOT/'tools'/'RUN_FIX45_SPACE_REAL_CPU.mjs',out])
         invoke([node,ROOT/'tools'/'RUN_R16_FIX10_CRTMOD_CPU.mjs',out])
         invoke([node,ROOT/'tools'/'RUN_R16_FIX11_GCLR_CPU.mjs',out])
         invoke([node,ROOT/'tools'/'RUN_R16_FIX12_SPRITE_CPU.mjs',out])
