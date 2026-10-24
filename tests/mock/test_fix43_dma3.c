@@ -39,6 +39,27 @@ int main(void){
  e=pwp_bus_sound_pop();
  assert((e&255)==0x34 && ((e>>10)&7)==2u);
  assert(pwp_bus_sound_pop()==-1 && pwp_bus_sound_bytes()==2u);
+ /* Genuine HD63450 OCR=4A 6-byte array descriptors: BTC counts blocks. */
+ pwp_bus_reset();wr(0xe92001u,2);wr(0xe9a005u,0x08);
+ ram[0x200]=0;ram[0x201]=0;ram[0x202]=1;ram[0x203]=0;
+ ram[0x204]=0;ram[0x205]=1;
+ ram[0x206]=0;ram[0x207]=0;ram[0x208]=1;ram[0x209]=1;
+ ram[0x20a]=0;ram[0x20b]=1;
+ setup_dma(0x0,1);wr(DMA+5,0x4au);wr(DMA+0x0b,0);
+ wr(DMA+0x1a,0);wr(DMA+0x1b,2);
+ wr(DMA+0x1d,0);wr(DMA+0x1e,2);wr(DMA+0x1f,0);
+ assert(pwp_bus_write8(DMA+7,0x80));
+ assert(pwp_bus_dma3_step(1,ram,sizeof(ram)));
+ assert(pwp_bus_dma3_bytes_sent()==1 && rd(DMA+0x1b)==1);
+ assert(rd(DMA+0x0f)==0x01 && rd(DMA+0x0b)==1);
+ assert(pwp_bus_dma3_step(4096,ram,sizeof(ram)));
+ assert(pwp_bus_dma3_bytes_sent()==2 && pwp_bus_dma3_completions()==1);
+ assert(rd(DMA)==0x80u && rd(DMA+0x1b)==0);
+ assert(rd(DMA+0x1f)==0x0c && rd(DMA+0x0f)==0x02);
+ assert(pwp_bus_sound_pop()==0x8000);
+ e=pwp_bus_sound_pop();assert((e&255)==0x12);
+ e=pwp_bus_sound_pop();assert((e&255)==0x34);
+ assert(pwp_bus_sound_pop()==-1);
  /* Never silently wrap unknown guest RAM. */
  pwp_bus_reset();wr(0xe92001u,2);setup_dma(0x1fffu,1);
  assert(pwp_bus_write8(DMA+7,0x80));
