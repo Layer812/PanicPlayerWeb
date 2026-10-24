@@ -60,6 +60,23 @@ int main(void){
  e=pwp_bus_sound_pop();assert((e&255)==0x12);
  e=pwp_bus_sound_pop();assert((e&255)==0x34);
  assert(pwp_bus_sound_pop()==-1);
+ /* FIX44: 1ms of 16MHz guest cycles at ADPCM clock index 2 is
+  * 187500/12 = 15625 nibbles/s = 7812.5 DMA bytes/s.
+  * Before FIX44 /48 incorrectly supplied only 3906.25 bytes/s. */
+ pwp_bus_reset();wr(0xe92001u,2);wr(0xe9a005u,0x08);
+ setup_dma(0x100,20);
+ assert(pwp_bus_write8(DMA+7,0x80));
+ assert(pwp_bus_dma3_step(1,ram,sizeof(ram)));
+ assert(pwp_bus_dma3_bytes_sent()==1);
+ assert(pwp_bus_dma3_step(16000,ram,sizeof(ram)));
+ assert(pwp_bus_dma3_bytes_sent()==8); /* 1 initial + 7 completed in first ms */
+ assert(pwp_bus_dma3_step(16000,ram,sizeof(ram)));
+ assert(pwp_bus_dma3_bytes_sent()==16); /* +8 completed in second ms */
+ assert(rd(DMA+0x0b)==4);
+ assert(pwp_bus_dma3_completions()==0);
+ assert(pwp_bus_dma3_step(16000,ram,sizeof(ram)));
+ assert(pwp_bus_dma3_bytes_sent()==20);
+ assert(pwp_bus_dma3_completions()==1 && rd(DMA)==0x80u);
  /* Never silently wrap unknown guest RAM. */
  pwp_bus_reset();wr(0xe92001u,2);setup_dma(0x1fffu,1);
  assert(pwp_bus_write8(DMA+7,0x80));

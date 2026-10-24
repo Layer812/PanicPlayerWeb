@@ -10,7 +10,7 @@
 import {verifyPanicX} from './hu-startup-probe.mjs';
 import {makeGuestClockLimiter, EMULATED_68000_HZ} from './guest-clock.mjs';
 import {matchMissingPalette0} from './pan-palette-evidence.mjs';
-import {decodeGuestADPCMChain,decodeNibble6258} from './adpcm-msm6258.mjs';
+import {decodeGuestADPCMChain,decodeNibble6258,directADPCMSampleRate} from './adpcm-msm6258.mjs';
 
 const REQUIRED = [
  '_pwp_mu_stage_ptr','_pwp_mu_stage_capacity','_pwp_mu_load',
@@ -141,7 +141,6 @@ export function createMusashiBridge(m, host, hu) {
     throw new Error('FIX29 requires rebuilt real Musashi WASM with ADPCM exports');
   /* FIX43: exact guest RAM/DMAC byte events, not pre-rendered PAN audio.
    * Source clock comes from PX68K adpcm.c; 8255 pan is active-low. */
-  const directClocks=[93750,125000,187500,125000,46875,62500,93750,62500];
   let directDecode={signal:0,index:0};
   let directSamples=[],directRate=0,directBytes=0;
   const flushDirectSound=()=>{
@@ -163,7 +162,7 @@ export function createMusashiBridge(m, host, hu) {
         flushDirectSound();host.audioControl?.(0);continue;
       }
       const rateIndex=(event>>>10)&7,pan=(event>>>8)&3;
-      const sourceRate=directClocks[rateIndex]/24;
+      const sourceRate=directADPCMSampleRate(rateIndex);
       let factor=1;
       while(sourceRate*factor<8000)factor*=2;
       const rate=Math.round(sourceRate*factor);
