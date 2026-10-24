@@ -134,6 +134,9 @@ export function createMusashiBridge(m, host, hu) {
   // A single IOCS call may be emitted repeatedly; keep exact event identity.
   // Legacy fake CPU fixtures are allowed to omit the audio exports, but an
   // actual rebuilt FIX29 core must expose ALL eight functions below.
+  if(typeof m._pwp_mu_dma3_bytes_sent==='function' &&
+     typeof m._pwp_mu_queue_space!=='function')
+    throw new Error('FIX45 requires genuine Musashi guest keyboard input export');
   const audioFns=['_pwp_mu_audio_serial','_pwp_mu_audio_kind','_pwp_mu_audio_chain_addr',
     '_pwp_mu_audio_chain_count','_pwp_mu_audio_mode','_pwp_mu_audio_ram_ptr'];
   if (audioFns.some(name=>typeof m[name]!=='function') &&
@@ -242,6 +245,9 @@ export function createMusashiBridge(m, host, hu) {
       paletteT0:typeof m._pwp_mu_video_palette_word==='function'?m._pwp_mu_video_palette_word(0,1):null,
       paletteEvidenceStatus,paletteEvidenceColor:paletteEvidenceOffset>=0?paletteEvidenceColor:null,paletteEvidenceOffset,
       adpcmControlCalls:optional('_pwp_mu_audio_control_calls'), adpcmChainCalls:optional('_pwp_mu_audio_chain_calls'),
+      guestSpacePending:optional('_pwp_mu_pending_space'),
+      guestSpaceConsumed:optional('_pwp_mu_consumed_space'),
+      guestSpaceRejected:optional('_pwp_mu_rejected_space'),
       adpcmDirectBytes:optional('_pwp_mu_sound_bytes'),adpcmQueueOverflows:optional('_pwp_mu_sound_overflows'),
       dma3BytesSent:optional('_pwp_mu_dma3_bytes_sent'),dma3Completions:optional('_pwp_mu_dma3_completions'),
       dma3Registers:typeof m._pwp_mu_dma3_register==='function'
@@ -568,8 +574,11 @@ export function createMusashiBridge(m, host, hu) {
       selected = null;
     },
     space() {
-      // No guest keyboard/SPACE transport exists yet. Must not invent one.
-      host.error('SPACE入力は未実装です（ゲスト入力が未接続）。');
+      if(!active || stopped || !selected || typeof m._pwp_mu_queue_space!=='function')
+        return false;
+      /* Real guest reads this $20 through DOS _INPOUT ($FF06). Do not
+       * skip PAN frames, issue a synthetic timer edge, or restart playback. */
+      return m._pwp_mu_queue_space() === 1;
     },
     async dispose() {stopped = true; active = false; selected = null; session++;}
   };

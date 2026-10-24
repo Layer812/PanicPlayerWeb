@@ -99,11 +99,21 @@ test('R10: stopping stale in-flight read prevents injection into new guest',asyn
   assert.equal(h.finishCount,0);
   assert.deepEqual(h.errors,[]);
 });
-test('R10: SPACE is explicitly unsupported, not an invented guest input',async()=>{
+test('FIX45: SPACE reaches guest queue only while playback is active',async()=>{
   const f=fakeCore([1]);const h=host();
+  let accepted=0;
+  f.m._pwp_mu_queue_space=()=>{++accepted;return 1;};
   const e=createMusashiBridge(f.m,h,fixtureHu());
-  e.space();assert.match(h.errors[0],/未実装/);
+  assert.equal(e.space(),false); // No selected/active PAN yet
   await assert.rejects(e.start(),/No PAN loaded/);
+  await e.load({id:1,size:4});
+  assert.equal(e.space(),false); // loaded but not playing
+  await e.start();
+  assert.equal(e.space(),true);
+  assert.equal(accepted,1);
+  await e.stop();
+  assert.equal(e.space(),false);
+  assert.deepEqual(h.errors,[]);
 });
 test('R10: SHA-256 pin rejects forged HU with correct-looking first bytes',async()=>{
   const {checkPanicSha256,PANIC_X_V138_SHA256}=await import('../src/panic-core.mjs');

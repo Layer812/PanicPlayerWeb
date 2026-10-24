@@ -6,6 +6,7 @@ import {discoverGithubPans,downloadGithubPan} from './github-pan.mjs';
 import {VideoOutput} from './video-output.js';
 import {AudioOutput} from './audio-output.js';
 import {loadEngine} from './engine-loader.js';
+import {isGuestSpaceKey,shouldIgnoreGuestSpaceTarget} from './guest-space-key.mjs';
 import {findPan16PaletteCandidates, MAX_PAN_PALETTE_SCAN} from './pan-palette-evidence.mjs';
 import {diagnostics,renderDiagnostics,sampleDiagnostics,fingerprintPan} from './diagnostic-panel.js';
 
@@ -220,10 +221,24 @@ el['file-list'].addEventListener('keydown',event=>{
   } else if(event.key==='Enter' && engine){event.preventDefault();void start();}
 });
 document.addEventListener('keydown',event=>{
-  const tag=event.target?.tagName;
-  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='BUTTON'||tag==='SELECT'||event.target===el['file-list'])return;
-  if(event.code==='Space' && engine && playing){event.preventDefault();engine.space();}
+  const target=event.target;
+  const tag=target?.tagName;
+  if(playing && engine && isGuestSpaceKey(event) &&
+     !shouldIgnoreGuestSpaceTarget(target,el['file-list'])){
+    /* Prevent the browser scrolling or re-clicking a focused PLAY/PREV/NEXT
+     * button. SPACE belongs to the real PANIC.X while playing; Enter still
+     * activates the focused button normally. No key-repeat flood. */
+    event.preventDefault();
+    if(!event.repeat && !engine.space())message('SPACE入力を受け付けられませんでした。',true);
+    return;
+  }
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='BUTTON'||tag==='SELECT'||target===el['file-list'])return;
   if(event.key==='Escape' && engine && playing){event.preventDefault();void stop();}
+});
+document.addEventListener('keyup',event=>{
+  if(playing && engine && isGuestSpaceKey(event) &&
+     !shouldIgnoreGuestSpaceTarget(event.target,el['file-list']))
+    event.preventDefault();
 });
 for (const eventName of ['dragenter','dragover']){
  el['drop-zone'].addEventListener(eventName,event=>{event.preventDefault();event.dataTransfer.dropEffect='copy';el['drop-zone'].classList.add('drag-over');});

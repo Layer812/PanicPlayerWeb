@@ -17,6 +17,7 @@ EXPORTS=[
  'pwp_mu_vdisp_ticks','pwp_mu_scanout_ticks','pwp_mu_vdisp_acks','pwp_mu_vdisp_pending','pwp_mu_vdisp_latched','pwp_mu_guest_cycles',
  'pwp_mu_gpip_reads','pwp_mu_gpip_level',
  'pwp_mu_run','pwp_mu_dispatch','pwp_mu_register','pwp_mu_pc',
+ 'pwp_mu_queue_space','pwp_mu_pending_space','pwp_mu_consumed_space','pwp_mu_rejected_space',
  'pwp_mu_steps','pwp_mu_status','pwp_mu_trap','pwp_mu_trap_pc',
  'pwp_mu_fault_address','pwp_mu_image_end','pwp_mu_bss_end',
  'pwp_mu_guest_peek32','pwp_mu_guest_peek8','pwp_mu_set_pan_size','pwp_mu_io_stage_ptr',

@@ -4,7 +4,7 @@ name: Panic Player Web regressions
 
 on:
   push:
-    branches: [dev/fix42-real-sound-control]
+    branches: [dev/fix42-real-sound-control, dev/fix45-space-guest-input]
   pull_request:
     branches: [main]
 
