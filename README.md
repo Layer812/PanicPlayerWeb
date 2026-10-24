@@ -1,5 +1,8 @@
 # Panic Player Web
 
+> **公開状況（2026-10-24）:** README・著作権資料とWeb画面HTMLを先行登録しています。FIX38のC/JavaScriptソース、テスト、ビルドスクリプト一式は、検証済みの公開用ZIPとして準備済みですが、**GitHub上への一括登録はまだ完了していません**。公開用ZIP同梱の `PUBLISH_TO_GITHUB.cmd` で登録できます。ソース登録後、この暫定表示は置き換わります。
+
+
 [English / 英語](README_en.md) · [著作権・謝辞](THIRD_PARTY_NOTICES.md) · [X68K Tab](https://github.com/Layer812/X68KTab5) · [panicplayer for M5Stack Tab5](https://github.com/Layer812/PanicPlayerTab5)
 
 **X68000のPANICアニメーション（`.PAN`）を、現代のWebブラウザで再生するための独立プロジェクトです。**
