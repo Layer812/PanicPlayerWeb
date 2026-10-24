@@ -10,7 +10,7 @@ int main(void){
  uint8_t v=0xff;
  pwp_audio_reset();assert(pwp_bus_pia_port_c()==0x0bu);
  assert(pwp_audio_access8(OPM_DATA_PORT));
- assert(!pwp_audio_access8(PWP_ADPCM_DATA));
+ assert(pwp_audio_access8(PWP_ADPCM_DATA)); /* FIX43 real data port */
  assert(pwp_audio_read8(OPM_DATA_PORT,&v) && v==0);
  opm_register_latch=0x1bu;
  assert(pwp_audio_write8(OPM_DATA_PORT,0x80u));
