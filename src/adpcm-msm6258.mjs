@@ -10,6 +10,15 @@ const STEP = [16,17,19,21,23,25,28,31,34,37,41,45,50,55,60,66,73,80,88,
   97,107,118,130,143,157,173,190,209,230,253,279,307,337,371,408,449,
   494,544,598,658,724,796,876,963,1060,1166,1282,1411,1552];
 const SHIFT = [-1,-1,-1,-1,2,4,6,8];
+/* PX68K adpcm.c ADPCM_Clocks[] are sample-rate*12 (for the 44.1kHz
+ * output scheduler). A DMA byte contains TWO 4-bit MSM6258 samples.
+ * Never divide by 24 here: that is the byte clock, not the sample clock. */
+const DIRECT_CLOCKS_X12 = Object.freeze([93750,125000,187500,125000,46875,62500,93750,62500]);
+export function directADPCMSampleRate(rateIndex) {
+  if (!Number.isInteger(rateIndex) || rateIndex < 0 || rateIndex >= DIRECT_CLOCKS_X12.length)
+    throw new RangeError('Invalid 8255 + YM2151 ADPCM clock index');
+  return DIRECT_CLOCKS_X12[rateIndex] / 12;
+}
 // 4MHz MSM6258 base, dividers 1024/768/512/384/256 (IOCS)
 const RATES = [3906.25,5208.333333333333,7812.5,10416.666666666666,15625];
 export function decodeNibble6258(state,n){
