@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panic Player Web R8 — VIDEO bus test</title>
+<style>
+html,body{background:#101010;color:#f5f5f5;font-family:system-ui,sans-serif;}
+body{max-width:960px;margin:2rem auto;padding:0 1rem;}
+h1{font-size:1.7rem}p{font-size:1.05rem;line-height:1.65}
+canvas{display:block;image-rendering:pixelated;width:min(100%,768px);aspect-ratio:4/3;border:1px solid #777;background:black}
+#status{font-size:1.15rem;font-weight:600}
+</style></head><body>
+<h1>Panic Player Web R8 — 映像回路テスト</h1>
+<p>これはX68000のGVRAMからCanvasへ実際にピクセルを渡す確認画面です。表示されるグラデーションは診断パターンであり、<strong>PANファイルの再生ではありません。</strong></p>
+<canvas id="canvas" width="320" height="240" aria-label="X68000 GVRAM 65536色テストパターン"></canvas>
+<p id="status">VIDEO WASM 読み込み中</p>
+<script type="module">
+const status=document.getElementById('status');
+try {
+  const bytes=await(await fetch('../core/pwp_x68k_video_frame.wasm',{cache:'no-store'})).arrayBuffer();
+  const e=(await WebAssembly.instantiate(bytes,{})).instance.exports;
+  e.pwp_bus_reset();
+  e.pwp_bus_write8(0xe80028,8); // 65536-color 512-dot graphics
+  const width=320,height=240;
+  for(let y=0;y<height;y++) for(let x=0;x<width;x++) {
+    const red=Math.min(31,(x*32/width)|0);
+    const green=Math.min(31,(y*32/height)|0);
+    const blue=Math.min(31,(((x>>4)^(y>>4))*2)&31);
+    const grbi=(green<<11)|(red<<6)|(blue<<1);
+    const guest=0xc00000+(y<<10)+(x<<1);
+    e.pwp_bus_write8(guest,grbi>>8);
+    e.pwp_bus_write8(guest+1,grbi&255);
+  }
+  if(!e.pwp_frame_render(width,height,0,0))throw Error('Frame render rejected');
+  const rgba=new Uint8ClampedArray(e.memory.buffer,e.pwp_frame_pointer(),e.pwp_frame_size());
+  if(rgba.length!==width*height*4)throw Error('Frame size mismatch');
+  const c=document.getElementById('canvas');
+  c.getContext('2d',{alpha:false}).putImageData(new ImageData(new Uint8ClampedArray(rgba),width,height),0,0);
+  status.textContent='PASS: 実WASM GVRAM → RGBA → Canvas（診断パターン）';
+  status.dataset.result='PASS';
+} catch(ex){status.textContent='FAIL: '+ex.message;status.dataset.result='FAIL';}
+</script></body></html>

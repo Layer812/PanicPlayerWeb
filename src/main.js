@@ -1,0 +1,324 @@
+// Panic Player Web — Copyright (c) 2026 Layer812
+// SPDX-License-Identifier: MIT (original Layer812-owned code only)
+// Third-party components and .PAN media retain separate notices.
+import {PanLibrary} from './pan-library.js';
+import {discoverGithubPans,downloadGithubPan} from './github-pan.mjs';
+import {VideoOutput} from './video-output.js';
+import {AudioOutput} from './audio-output.js';
+import {loadEngine} from './engine-loader.js';
+import {findPan16PaletteCandidates, MAX_PAN_PALETTE_SCAN} from './pan-palette-evidence.mjs';
+import {diagnostics,renderDiagnostics,sampleDiagnostics,fingerprintPan} from './diagnostic-panel.js';
+
+const byId = (id) => document.getElementById(id);
+const el = Object.fromEntries([
+ 'vdisp-status','screen','screen-shell','screen-overlay','overlay-title','overlay-description','screen-filename','screen-mode',
+ 'prev','play','next','repeat','folder-auto','fullscreen','status','audio-status','count','open-files','open-folder','clear',
+ 'file-input','folder-input','drop-zone','file-list','github-status'
+].map(id => [id,byId(id)]));
+
+const library = new PanLibrary();
+const video = new VideoOutput(el.screen);
+const audio = new AudioOutput();
+let engine = null;
+let playing = false;
+let repeat = false;
+let folderAuto = false;
+let finishing = false;
+let transition = false;
+let generation = 0;
+let firstVisible = false;
+let retainedFrame = false;
+let deliveredDisplayUpdates = 0;
+
+video.blank();
+
+function message(s, isError=false) {
+  el.status.textContent = s;
+  el.status.classList.toggle('error', isError);
+}
+function prettyBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n/1024).toFixed(1)} KiB`;
+  return `${(n/(1024*1024)).toFixed(2)} MiB`;
+}
+function getFilename() {
+  return library.selected?.name ?? 'NO FILE';
+}
+function display() {
+  el.count.textContent = String(library.size);
+  el['screen-filename'].textContent = getFilename();
+  el['screen-mode'].textContent = playing ? 'PLAYING' : (retainedFrame ? 'END' : (engine ? 'READY' : 'OFFLINE'));
+  el.play.textContent = playing ? 'STOP' : 'PLAY';
+  el.play.disabled = !engine || !library.selected || transition;
+  el.prev.disabled = !engine || !library.size || transition;
+  el.next.disabled = !engine || !library.size || transition;
+  el.clear.disabled = !library.size || transition;
+  el.repeat.setAttribute('aria-pressed', String(repeat));
+  el['folder-auto'].setAttribute('aria-pressed', String(folderAuto));
+  el['screen-overlay'].hidden = playing || retainedFrame;
+  el['file-list'].replaceChildren();
+  if (!library.size) {
+    const p = document.createElement('p');p.className='empty';
+    p.textContent='まだPANファイルが選択されていません。';el['file-list'].append(p);
+  } else {
+    for (const item of library.entries) {
+      const selected = item.id === library.selectedId;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'file-entry' + (selected ? ' active' : '');
+      button.setAttribute('role', 'option');
+      button.setAttribute('aria-selected', String(selected));
+      button.dataset.entryId = String(item.id);
+      const fileName = document.createElement('span');fileName.className='file-name';
+      fileName.textContent=item.path;
+      const size = document.createElement('span');size.className='file-size';
+      size.textContent=prettyBytes(item.size) + (item.remote ? ' · GitHub' : '');
+      button.append(fileName, size);
+      button.addEventListener('click', () => {void choose(item.id);});
+      button.addEventListener('dblclick', () => {void start();});
+      el['file-list'].append(button);
+    }
+  }
+}
+async function stop({retainFrame=false,keepAudio=false}={}) {
+  if (!engine || transition) return;
+  const token = ++generation;
+  transition=true;display();
+  try {if(diagnostics.phase==='実行中'){diagnostics.finish('手動停止');renderDiagnostics();}await engine.stop();playing=false;if(!keepAudio)await audio.stop();if (!retainFrame) {video.blank();firstVisible=false;} retainedFrame=retainFrame && firstVisible;}
+  catch (e) {message(`終了失敗: ${e?.message ?? e}`,true);}
+  finally {if (token === generation) {transition=false;playing=false;display();}}
+}
+async function choose(id) {
+  if (id === library.selectedId) return;
+  if (playing) await stop();
+  library.select(id);
+  video.blank();retainedFrame=false;firstVisible=false;deliveredDisplayUpdates=0;
+  display();
+  if(library.selected){diagnostics.chooseFile(library.selected);renderDiagnostics();if(!library.selected.remote || library.selected.file)void fingerprintPan(library.selected,(id,pos,len)=>library.readRange(id,pos,len));}
+  if (library.selected) message(`選択: ${library.selected.path}（${prettyBytes(library.selected.size)}）`);
+}
+async function start({automatic=false}={}) {
+  if (!engine || !library.selected || playing || transition) return;
+  const item = library.selected;
+  const token=++generation;
+  transition=true;display();
+  try {
+    // Manual PLAY enables audio synchronously from the click gesture.
+    // Automatic next/repeat shares that granted AudioContext.
+    if (!automatic) await audio.enable();
+    // No PAN bytes are downloaded automatically. A PLAY/PREV/NEXT action
+    // fetches the selected entry from the fixed repository, then verifies it.
+    if(item.remote && !item.file) {
+      message(`GitHubから ${item.name} を検証して読み込んでいます…`);
+      await library.prepare(item.id, downloadGithubPan);
+      if (token !== generation || library.selectedId !== item.id) return;
+    }
+    audio.halt();
+    video.blank();retainedFrame=false;firstVisible=false;deliveredDisplayUpdates=0;
+    diagnostics.chooseFile(item);renderDiagnostics();
+    void fingerprintPan(item,(id,pos,len)=>library.readRange(id,pos,len));
+    let paletteEvidenceRecords=[];
+    if(item.size<=MAX_PAN_PALETTE_SCAN){
+      try{
+        const bytes=await library.readRange(item.id,0,item.size);
+        paletteEvidenceRecords=findPan16PaletteCandidates(bytes);
+      }catch{/* Optional display evidence must never stop guest playback. */}
+    }
+    await engine.load({id:item.id,name:item.name,size:item.size,paletteEvidenceRecords});
+    if (token !== generation) return;
+    diagnostics.begin();renderDiagnostics();
+    await engine.start();
+    playing = true;
+    message(`再生中：${item.path}`);
+  } catch (e) {
+    playing=false;
+    diagnostics.finish('異常停止',e?.message??String(e));renderDiagnostics();byId('diagnostics').open=true;
+    message(`再生に失敗しました: ${e?.message ?? e}`,true);
+  } finally {
+    if (token === generation) {transition=false;display();}
+  }
+}
+async function finished() {
+  if (!playing || finishing) return;
+  finishing = true;
+  try {
+    const continueCurrent = repeat;
+    const continueFolder = folderAuto && library.size > 0;
+    diagnostics.finish('終了', `再生終了。表示更新 ${diagnostics.latest.outputSamples??'不明'}回`);
+    renderDiagnostics();
+    await stop({retainFrame:firstVisible && !continueCurrent && !continueFolder,keepAudio:continueCurrent||continueFolder});
+    if (continueCurrent || continueFolder) {
+      if (continueFolder) library.moveWrap(1);
+      display();
+      await start({automatic:true});
+    } else {
+      message(retainedFrame ? '再生終了。最終画面を保持しています。' : '再生終了');
+    }
+  } finally { finishing = false; }
+}
+// PREV/NEXT must start playback immediately with audio, even if the prior
+// track is running. Enable WebAudio before any await that could lose the
+// user activation needed by browsers.
+async function jumpAndPlay(delta) {
+  if (!engine || !library.size || transition) return;
+  let audioReady;
+  try { audioReady = audio.enable(); } catch (error) {
+    message(`音声を開始できません: ${error?.message??error}`, true);return;
+  }
+  try {
+    await audioReady;
+    if (playing) await stop({keepAudio:true});
+    if (transition) return;
+    library.moveWrap(delta);
+    display();
+    await start({automatic:true});
+  } catch (error) {
+    message(`曲送りに失敗しました: ${error?.message??error}`, true);
+  }
+}
+async function move(delta) {
+  if (!library.size || transition) return;
+  if (playing) await stop();
+  library.move(delta);
+  display();
+  if(library.selected){diagnostics.chooseFile(library.selected);renderDiagnostics();if(!library.selected.remote || library.selected.file)void fingerprintPan(library.selected,(id,pos,len)=>library.readRange(id,pos,len));}
+  if (library.selected) message(`選択: ${library.selected.path}`);
+}
+function handleFiles(files) {
+  const result = library.add(files);
+  display();
+  if(library.selected && diagnostics.phase==='準備中'&&!diagnostics.file){diagnostics.chooseFile(library.selected);renderDiagnostics();if(!library.selected.remote || library.selected.file)void fingerprintPan(library.selected,(id,pos,len)=>library.readRange(id,pos,len));}
+  if (result.accepted) message(`${result.accepted}件を読み込みました。${library.size}件のPANを一覧表示しています。${engine ? '' : '再生コアは未接続です。'}`);
+  else message(`有効な新規.PANはありません（対象外 ${result.skipped}件 / 重複 ${result.duplicates}件）。`);
+}
+
+el['open-files'].addEventListener('click',()=>el['file-input'].click());
+el['open-folder'].addEventListener('click',()=>el['folder-input'].click());
+el['file-input'].addEventListener('change',event=>{
+  handleFiles(event.target.files);event.target.value='';
+});
+el['folder-input'].addEventListener('change',event=>{
+  handleFiles(event.target.files);event.target.value='';
+});
+el.clear.addEventListener('click',async()=>{
+  if(playing)await stop();library.clear();diagnostics.reset();renderDiagnostics();video.blank();retainedFrame=false;firstVisible=false;deliveredDisplayUpdates=0;display();message('PAN一覧をクリアしました。');
+});
+el.prev.addEventListener('click',()=>{void jumpAndPlay(-1);});
+el.next.addEventListener('click',()=>{void jumpAndPlay(1);});
+el.play.addEventListener('click',()=>{if(playing)void stop();else void start();});
+el.repeat.addEventListener('click',()=>{repeat=!repeat;if(repeat)folderAuto=false;display();message(repeat?'現在のPANを繰り返します。':'REPEATを解除しました。');});
+el['folder-auto'].addEventListener('click',()=>{folderAuto=!folderAuto;if(folderAuto)repeat=false;display();message(folderAuto?'一覧の末尾から先頭へ戻る自動再生を有効にしました。':'FOLDER AUTOを解除しました。');});
+el.fullscreen.addEventListener('click',async()=>{
+ try {
+  if(document.fullscreenElement) await document.exitFullscreen();
+  else await el['screen-shell'].requestFullscreen();
+ } catch(e){message(`フルスクリーンを使用できません: ${e?.message ?? e}`,true);}
+});
+el['file-list'].addEventListener('keydown',event=>{
+  if(event.key === 'ArrowDown' || event.key === 'ArrowUp'){
+    event.preventDefault();void move(event.key === 'ArrowDown' ? 1 : -1);
+  } else if(event.key==='Enter' && engine){event.preventDefault();void start();}
+});
+document.addEventListener('keydown',event=>{
+  const tag=event.target?.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='BUTTON'||tag==='SELECT'||event.target===el['file-list'])return;
+  if(event.code==='Space' && engine && playing){event.preventDefault();engine.space();}
+  if(event.key==='Escape' && engine && playing){event.preventDefault();void stop();}
+});
+for (const eventName of ['dragenter','dragover']){
+ el['drop-zone'].addEventListener(eventName,event=>{event.preventDefault();event.dataTransfer.dropEffect='copy';el['drop-zone'].classList.add('drag-over');});
+}
+el['drop-zone'].addEventListener('dragleave',()=>el['drop-zone'].classList.remove('drag-over'));
+el['drop-zone'].addEventListener('drop',event=>{
+ event.preventDefault();el['drop-zone'].classList.remove('drag-over');handleFiles(event.dataTransfer.files);
+});
+
+display();
+// Metadata-only discovery. 404 = no hosted folder yet; no change to local UI.
+void discoverGithubPans().then(entries => {
+  const added = library.addGithubPans(entries);
+  el['github-status'].textContent = entries.length ?
+    `GitHub pan/: ${entries.length}件を検出（PLAY時に取得）` :
+    'GitHub pan/: PAN未登録';
+  display();
+  if (added && !diagnostics.file && library.selected) {
+    diagnostics.chooseFile(library.selected);renderDiagnostics();
+  }
+}).catch(error => {
+  el['github-status'].textContent = 'GitHub pan/: 取得できません（ローカル再生は利用可能）';
+});
+const result=await loadEngine({
+  readPan:(id,offset,length)=>library.readRange(id,offset,length),
+  videoFrame:(width,height,rgba)=>{video.frame(width,height,rgba);},
+  guestDiagnostic:(sample)=>sampleDiagnostics(sample),
+  paletteEvidence:({status,color,offset,guestG0})=>{
+    const target=byId('palette-evidence-status');
+    if(target)target.textContent=`パレット0補正：${status}`+
+      (color===null?'':` / 色 $${color.toString(16).padStart(4,'0').toUpperCase()}`)+
+      (offset<0?'':` / PAN offset 0x${offset.toString(16)}`)+
+      (guestG0===null?'':` / 実GPal[0]=$${guestG0.toString(16).padStart(4,'0')}`);
+  },
+  guestTiming:({ticks,scanout,frameWait,irqAcks,irqLatched,gpipReads,gpipLevel,guestPC,measuredMHz,targetMHz,clockStats,skippedScanouts})=>{
+    const marker=el['vdisp-status'];
+    if(marker)marker.textContent=`V-DISP ${ticks} / 表示開始 ${scanout} / IRQ ${irqAcks} / 保留 ${irqLatched===null?'不明':irqLatched} / PANIC待機 ${frameWait ?? '不明'} / GPIP読取 ${gpipReads} / bit4 ${gpipLevel} / CPU ${Number.isFinite(measuredMHz)?measuredMHz.toFixed(2):'?'} / ${targetMHz??16}MHz / 表示間引き ${skippedScanouts??0}回 / 遅延 ${Number.isFinite(clockStats?.lateMs)?clockStats.lateMs.toFixed(1):'?'}ms / PC 0x${(guestPC>>>0).toString(16)}`;
+  },
+  displayUpdate:({number,guestSteps,guestVblank,guestScanout,signature,r2})=>{
+    deliveredDisplayUpdates=number;
+    // Frame details remain available through the folded diagnostic panel.
+  },
+  firstVisibleFrame:({number,pixelMutations})=>{firstVisible=true;retainedFrame=true;display();},
+  audioControl:(kind)=>{
+    if(kind===0)audio.halt();
+    else if(kind===1)void audio.pause();
+    else if(kind===2)void audio.resume();
+  },
+  guestAudio:({kind,rate,bytes,chains,samples})=>{
+    el['audio-status'].textContent=`ADPCM: ${kind} / ${rate} Hz / ${samples} 標本 / ${chains} 区間`;
+  },
+  audioFrames:(samples,rate,channels)=>{
+    const ok=audio.enqueue(samples,rate,channels);
+    el['audio-status'].textContent=ok
+      ?`音声：ADPCM ${rate}Hz / ${samples.length/channels}標本をPCM出力に渡しました`
+      :'音声：ADPCMは復号済み。ブラウザ音声が無効、または再生キューが満杯です。';
+    return ok;
+  },
+  finished:()=>{void finished();},
+  error:(detail)=>{
+    playing=false;
+    diagnostics.finish('異常停止',detail);renderDiagnostics();byId('diagnostics').open=true;
+    message(`PANICコア停止: ${detail}`,true);
+    display();
+  }
+});
+engine=result.engine;
+el['overlay-title'].textContent=engine?'EXPERIMENTAL CPU CORE':'PLAYBACK CORE NOT CONNECTED';
+el['overlay-description'].textContent=engine?'実Musashi / 映像 / ADPCM音声の試験実装。実再生の完全互換性は未検証です。':'ブラウザ側のPANファイラーは動作しますが、PANICの完全な再生コアは未完成です。';
+message(engine?'PANファイルを選択してください。':result.reason,!engine);
+if(!engine){diagnostics.finish('異常停止',result.reason);renderDiagnostics();byId('diagnostics').open=true;}
+display();
+
+// Local-only one-click launch. The explicit PAN remains on the user's disk;
+// the 127.0.0.1 server reads it and never writes into the source directory.
+// This imports an actual .PAN file; no frames are synthesized from screenshots.
+if (new URLSearchParams(location.search).get('autoload')==='1') {
+  try {
+    const metaResponse=await fetch('/__local_pan_meta',{cache:'no-store'});
+    if (!metaResponse.ok)throw new Error('ローカルPAN情報がありません');
+    const metadata=await metaResponse.json();
+    const fileResponse=await fetch('/__local_pan',{cache:'no-store'});
+    if (!fileResponse.ok)throw new Error('ローカルPANデータがありません');
+    const actualFile=new File([await fileResponse.blob()],metadata.name,{type:'application/octet-stream'});
+    if (actualFile.size!==metadata.size)throw new Error('PANサイズが一致しません');
+    const importResult=library.add([actualFile]);
+    if (importResult.accepted!==1)throw new Error('PANファイルの読込に失敗');
+    const localEntry=library.entries.find(x=>!x.remote && x.name===actualFile.name && x.size===actualFile.size);
+    if(!localEntry)throw new Error('ローカルPANの選択に失敗');
+    library.select(localEntry.id);
+    display();
+    if (!engine) throw new Error(result.reason || '実Musashi未接続');
+    await start({automatic:true});
+  } catch (e) {
+    diagnostics.finish('異常停止',`自動読込: ${e?.message??e}`);renderDiagnostics();byId('diagnostics').open=true;
+    message(`自動再生を開始できませんでした: ${e?.message??e}`,true);
+  }
+}

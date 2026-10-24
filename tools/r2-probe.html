@@ -1,0 +1,9 @@
+<!doctype html><meta charset="utf-8"><title>PWP R2 browser guestfs probe</title>
+<main><h1>Panic Player Web R2 HostFS browser probe</h1><pre id="out">RUNNING</pre></main>
+<script type="module">
+const worker = new Worker(new URL('./r2-probe-worker.js',import.meta.url),{type:'module'});
+worker.onmessage=e=>{document.querySelector('#out').textContent=e.data.message;document.body.dataset.probe=e.data.ok?'pass':'fail';worker.terminate();};
+worker.onerror=e=>{document.querySelector('#out').textContent='FAIL: Worker module '+e.message;document.body.dataset.probe='fail';};
+const file = new File([Uint8Array.of(16,17,18,19,20)],'CHECK.PAN',{type:'application/octet-stream'});
+worker.postMessage({file});
+</script>
