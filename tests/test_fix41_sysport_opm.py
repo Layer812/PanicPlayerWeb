@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Layer812. SPDX-License-Identifier: MIT.
 """FIX41 native bus semantics: SysPort contrast and YM2151 select port."""
 from pathlib import Path
 import subprocess, tempfile, unittest

@@ -1,4 +1,6 @@
-/* FIX41: reproduce two reported real-PAN unknown-MMIO failures. */
+/* FIX41: reproduce two reported real-PAN unknown-MMIO failures.
+ * Copyright (c) 2026 Layer812. SPDX-License-Identifier: MIT.
+ */
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
