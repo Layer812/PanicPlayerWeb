@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#101010">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="PANIC PLAYER WEB: a standalone browser frontend for X68000 PAN animations. Actual Musashi 68000 and guest-visible screen updates.">
+  <title>PANIC PLAYER WEB — CPU 16MHz</title>
+  <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+  <main class="app" id="app">
+    <header class="header">
+      <div>
+        <h1>PANIC PLAYER <span>WEB</span></h1>
+      </div>
+      <div class="release">68000 <span>16MHz</span></div>
+    </header>
+
+
+    <section class="screen-section" aria-label="再生画面">
+      <div id="screen-shell" class="screen-shell">
+        <canvas id="screen" width="768" height="512" aria-label="PANICビデオ画面"></canvas>
+        <div class="screen-overlay" id="screen-overlay">
+          <div class="screen-wordmark">PANIC</div>
+          <p id="overlay-title">ORIGINAL PANIC.X / MUSASHI</p>
+          <p class="screen-help" id="overlay-description">.PANの読み込みと一覧操作は利用できます。オリジナルPANIC.Xとユーザー所有PANを実Musashiで実行します。</p>
+        </div>
+        <div class="screen-bottom"><span id="screen-filename">NO FILE</span><span id="screen-mode">STANDBY</span></div>
+      </div>
+    </section>
+
+    <section class="controls" aria-label="再生操作">
+      <button id="prev" type="button" disabled title="前のPANを音声付きで再生">◀ PREV</button>
+      <button id="play" type="button" disabled title="音声付き再生・停止">PLAY</button>
+      <button id="next" type="button" disabled title="次のPANを音声付きで再生">NEXT ▶</button>
+      <button id="repeat" type="button" aria-pressed="false" title="現在のPANを繰り返し再生">REPEAT</button>
+      <button id="folder-auto" type="button" aria-pressed="false" title="一覧を順に再生し末尾で先頭に戻る">FOLDER AUTO</button>
+      <button id="fullscreen" type="button">FULL</button>
+    </section>
+
+    <div id="status" class="status" role="status" aria-live="polite">起動処理中…</div>
+
+    <section class="library" aria-labelledby="library-heading">
+      <div class="library-header">
+        <div>
+          <div class="eyebrow">LOCAL PAN + LAYER812 GITHUB PAN</div>
+          <h2 id="library-heading">PAN LIBRARY <span id="count">0</span></h2>
+        </div>
+        <div class="import-actions">
+          <button type="button" id="open-files">PANファイルを選択</button>
+          <button type="button" id="open-folder">フォルダを選択</button>
+          <button type="button" id="clear" disabled>一覧クリア</button>
+        </div>
+        <input id="file-input" type="file" accept=".pan" multiple hidden>
+        <input id="folder-input" type="file" webkitdirectory directory multiple hidden>
+      </div>
+      <div id="drop-zone" class="drop-zone">.PANファイルをここにドラッグ＆ドロップできます（フォルダは「フォルダを選択」から）</div>
+      <p class="privacy">ローカルPANは外部送信しません。GitHubの公開pan/フォルダはファイル名・サイズのみ確認し、ファイル本体はPLAY操作時に取得します。任意URLは読み込みません。</p>
+      <p id="github-status" class="privacy" aria-live="polite">GitHub pan/: 確認中…</p>
+      <div id="file-list" class="file-list" role="listbox" aria-label="PANファイル一覧" tabindex="0">
+        <p class="empty">まだPANファイルが選択されていません。</p>
+      </div>
+    </section>
+
+    <details id="diagnostics" class="diagnostics">
+      <summary class="diagnostics-toggle">再生診断 <span class="diag-toggle-hint">クリックして表示・非表示</span><span id="diag-state">未開始</span></summary>
+      <div class="diag-body">
+        <div id="diag-headline" class="diag-headline" role="status" aria-live="polite">再生状態を確認できます。</div>
+      <div class="diagnostics-head">
+        <div><div class="eyebrow">ACTUAL GUEST EVIDENCE / FACTS VS HYPOTHESES</div>
+          <h2 id="diagnostics-heading">実行情報</h2></div>
+        <button id="diag-copy" type="button">診断内容をコピー</button>
+      </div>
+      <div id="diag-summary" class="diag-summary" role="status" aria-live="polite">PANを選択して再生すると、原因と実行状態をここに表示します。</div>
+      <div class="diag-sections">
+        <div><h3>確認できた事実</h3><div id="diag-facts" class="diag-lines">未計測</div></div>
+        <div><h3>原因候補・次に確認する箇所</h3><div id="diag-hypotheses" class="diag-lines">まだ判断できません。</div></div>
+      </div>
+      <h3>実行値（変化を観測）</h3>
+      <div id="diag-metrics" class="diag-metrics" aria-live="off">CPU・MFP・GVRAMの情報を待っています。</div>
+      <details open class="diag-history"><summary>イベント履歴と詳細（最大60件）</summary><div id="diag-events" class="diag-lines">ログ待機中</div></details>
+      <p class="diag-privacy">診断データはブラウザ内で生成します。PAN本文はレポートに含めません。新規PANのSHA-256・先頭16バイトは形式の参考情報であり、正常性の保証ではありません。</p>
+      <div id="audio-status" class="diag-privacy" aria-live="off">音声：未開始</div>
+      <div id="palette-evidence-status" class="diag-privacy" aria-live="off"></div>
+      <div id="vdisp-status" class="diag-privacy" aria-live="off"></div>
+      </div>
+    </details>
+
+
+    <footer class="credits">
+      <div><a href="https://github.com/Layer812/PanicPlayerWeb" target="_blank" rel="noopener noreferrer">GitHub — PanicPlayerWeb</a></div>
+      <div>Web移植 © 2026 Layer812 · PANIC © 永田英哉（pako／ぱこたん） · PANIC V1.38改訂：なしみ</div>
+      <div>Musashi © Karl Stenerud · PX68K／X68000互換実装への謝辞：hissorii・kenyahiro・けんじょ・NONAKA Kimihiro</div>
+      <div>各PAN作品の著作権は、それぞれのデータ制作者・権利者に帰属します。<a href="./THIRD_PARTY_NOTICES.html">著作権・謝辞と参照先</a></div>
+    </footer>
+  </main>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
