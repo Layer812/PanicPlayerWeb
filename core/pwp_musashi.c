@@ -1007,6 +1007,7 @@ int32_t pwp_mu_run(uint32_t max_instructions) {
      * The V-DISP source is clocked from those actual guest cycles, so a
      * busy-loop cannot freeze virtual video time. */
     pwp_advance_vdisp(used>0?(uint32_t)used:1u);
+    pwp_bus_audio_advance_cycles(used>0?(uint32_t)used:1u);
 #ifdef PWP_TAB5_MUSASHI
     if (pwp_vdisp_acks!=acks_before) {m68k_set_irq(0);pwp_vdisp_pending=0;}
 #endif
