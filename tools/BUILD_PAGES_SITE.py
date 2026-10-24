@@ -37,7 +37,7 @@ def build(root: Path, destination: Path, original_docs: Path) -> list[str]:
             raise RuntimeError(f"Missing real runtime artifact: {f}")
     if _sha(x.read_bytes()) != PANIC_SHA256:
         raise RuntimeError("PANIC.X is not the pinned original V1.38")
-    if wasm.read_bytes()[:4] != b"\\x00asm":
+    if wasm.read_bytes()[:4] != b"\x00asm":
         raise RuntimeError("Missing actual WebAssembly magic")
     for name in PAGES_FILES:
         if not (root / name).is_file():
@@ -61,7 +61,7 @@ def build(root: Path, destination: Path, original_docs: Path) -> list[str]:
             if not pan.is_file() or pan.suffix.lower() != ".pan":
                 continue
             size = pan.stat().st_size
-            if size < 16 or size > MAX_PAN_BYTES or not pan.read_bytes()[:6] == b"PANIC\\x1a":
+            if size < 16 or size > MAX_PAN_BYTES or not pan.read_bytes()[:6] == b"PANIC\x1a":
                 raise RuntimeError(f"Invalid publicly committed PAN sample: {pan.name}")
             shutil.copy2(pan, stage / "pan" / pan.name)
         (stage / "legal").mkdir()
@@ -72,22 +72,22 @@ def build(root: Path, destination: Path, original_docs: Path) -> list[str]:
             raise RuntimeError("Original SoftFloat licensing material is missing")
         shutil.copy2(musashi_softfloat, stage / "legal" / "SoftFloat_README.txt")
         (stage / "legal" / "Musashi_LICENSE.txt").write_text(
-            "Musashi Motorola 680x0 Emulator\\n"
-            "Copyright Karl Stenerud. All rights reserved.\\n\\n"
+            "Musashi Motorola 680x0 Emulator\n"
+            "Copyright Karl Stenerud. All rights reserved.\n\n"
             "Permission is hereby granted, free of charge, to any person obtaining a copy "
-            "of this software and associated documentation files (the \\"Software\\"), to deal "
+            "of this software and associated documentation files (the \"Software\"), to deal "
             "in the Software without restriction, including without limitation the rights "
             "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell "
             "copies of the Software, and to permit persons to whom the Software is "
-            "furnished to do so, subject to the following conditions:\\n\\n"
+            "furnished to do so, subject to the following conditions:\n\n"
             "The above copyright notice and this permission notice shall be included "
-            "in all copies or substantial portions of the Software.\\n\\n"
+            "in all copies or substantial portions of the Software.\n\n"
             'THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR '
             "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, "
             "FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE "
             "AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER "
             "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, "
-            "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\\n",
+            "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n",
             encoding="utf-8")
         (stage / ".nojekyll").write_text("", encoding="ascii")
         # Gate the copied runtime AGAIN; never publish partial or stale artifacts.
