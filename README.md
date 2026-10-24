@@ -41,7 +41,7 @@ Windowsでの開発用起動例：
 py -3 tools\START_PLAY.py --source "G:\X68KTab5" --pan "G:\MyPAN\example.PAN"
 ```
 
-**公開状況：** 現在はREADME、権利資料、Web画面HTMLを先行公開しています。FIX38のエミュレータ本体・JavaScript・ビルドスクリプト・テスト一式は公開用パッケージとして整理済みですが、**GitHubへの一括登録は未完了**です。上記起動コマンドはソース一式の登録後に利用できます。また、完成済みのCPU WASMやPANIC.Xはこのリポジトリには含みません。
+**公開状況：** FIX39のソース、ビルドスクリプト、テスト一式はGitHubに掲載済みです。GitHub Pages用の実Musashi CPU WASMとオリジナルPANIC.Xはソース管理には含めず、手動実行の[Pagesワークフロー](.github/workflows/pages.yml)で生成・検証します。**すべての検証を通過した場合のみ、必要な実行ファイルと権利資料をPages用の配布物に含めます。** 現時点ではPagesの実稼働は未確認です。
 
 開発用の `tools/` はビルド・起動に必要です。`tests/` は回帰検証用、`docs/` は開発・参考資料用です。GitHubには残し、GitHub Pagesには公開に必要な実行ファイルだけを配置する予定です。
 
