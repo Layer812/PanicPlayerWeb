@@ -1008,6 +1008,8 @@ int32_t pwp_mu_run(uint32_t max_instructions) {
      * busy-loop cannot freeze virtual video time. */
     pwp_advance_vdisp(used>0?(uint32_t)used:1u);
     pwp_bus_audio_advance_cycles(used>0?(uint32_t)used:1u);
+    if(!pwp_bus_dma3_step(used>0?(uint32_t)used:1u,ram,PWP_RAM_BYTES))
+      invalid_bus(pwp_bus_dma3_fault_address());
 #ifdef PWP_TAB5_MUSASHI
     if (pwp_vdisp_acks!=acks_before) {m68k_set_irq(0);pwp_vdisp_pending=0;}
 #endif
@@ -1038,6 +1040,13 @@ uint32_t pwp_mu_audio_chain_count(void){return adpcm_chain_count;}
 uint32_t pwp_mu_audio_mode(void){return adpcm_mode;}
 uint32_t pwp_mu_audio_ram_ptr(void){return (uint32_t)(uintptr_t)ram;}
 uint32_t pwp_mu_audio_control_calls(void){return adpcm_control_calls;}
+/* Chronological real guest ADPCM byte events. -1 means queue empty. */
+int32_t pwp_mu_sound_pop(void){return pwp_bus_sound_pop();}
+uint32_t pwp_mu_sound_bytes(void){return pwp_bus_sound_bytes();}
+uint32_t pwp_mu_sound_overflows(void){return pwp_bus_sound_overflows();}
+uint32_t pwp_mu_dma3_bytes_sent(void){return pwp_bus_dma3_bytes_sent();}
+uint32_t pwp_mu_dma3_completions(void){return pwp_bus_dma3_completions();}
+uint32_t pwp_mu_dma3_register(uint32_t offset){return pwp_bus_dma3_register(offset);}
 uint32_t pwp_mu_audio_chain_calls(void){return adpcm_chain_calls;}
 uint32_t pwp_mu_iocs_gclr_calls(void){return iocs_gclr_calls;}
 uint32_t pwp_mu_iocs_sp_init_calls(void){return iocs_sp_init_calls;}
