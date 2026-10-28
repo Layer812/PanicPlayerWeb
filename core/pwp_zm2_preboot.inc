@@ -47,6 +47,14 @@ int32_t pwp_mu_tsr_begin(uint32_t n){
    * without PCM8/ZmuSiC magic or callable fake service. */
   w32(ram+0x88u,0x00ff0000u);
   w32(ram+0x8cu,0x00ff0000u);
+  /* ROM IOCS defaults: original Z-MUSIC checks these vectors against
+   * $C00000 before installing its own driver handlers. A zero is NOT a
+   * valid default and falsely triggers 'already occupied'. */
+  w32(ram+0x228u,0x00ff0000u); /* MIDI receive vector $8A */
+  w32(ram+0x1a8u,0x00ff0000u); /* MFP/ADPCM stop vector $6A */
+  iocs_vectors[0xf0u]=0x00ff0000u; /* IOCS $1F0 */
+  iocs_vectors[0x60u]=0x00ff0000u; /* IOCS $160 */
+  iocs_vectors[0x67u]=0x00ff0000u; /* IOCS $167 */
   /* Standard Human68k last character-device node: NUL. This is a virtual
    * system device-chain record, NOT a fake Z-MUSIC resident driver.
    * ZMUSIC.X scans from $6800, checks 'NUL     ' and attribute $8024,

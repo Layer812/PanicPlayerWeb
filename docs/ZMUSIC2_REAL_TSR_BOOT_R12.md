@@ -139,3 +139,16 @@ attribute `$8024`, name `NUL     `, and end-of-list pointer `-1`;
 this is a system device, **not** Z-MUSIC residency. IOCS _B_SUPER now
 uses the actual 68000 SR, USP and ISP banks. Pages production remains
 unmodified.
+
+## R21 unclaimed MIDI/IOCS vectors and OPM ISR registration
+
+After the virtual IPL and NUL device fixes, genuine ZMUSIC208.X still
+printed `MUSIC BIOS has already been included in your system.` and exited
+without invoking IOCS _B_INTVCS. Original `set_vect` checks the MIDI
+receive vector at `$228`; zero falsely indicates the interrupt has
+already been occupied. Initializing uninstalled MFP/IOCS vectors to their
+readable ROM-range default (`$FF0000`) lets the actual guest distinguish
+unclaimed hardware from a resident handler. Added ROM defaults for the
+MIDI RX vector `$228`, ADPCM stop vector `$1A8`, and IOCS `$1F0`,
+`$160`, `$167`. IOCS `_OPMINTST` now saves the real guest ISR pointer
+with range validation, without manufacturing timer events or FM audio.

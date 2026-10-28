@@ -104,6 +104,7 @@ static uint32_t tsr_context_bytes, tsr_heap, tsr_status, tsr_steps;
 static uint64_t tsr_saved_cycles,tsr_saved_vdisp,tsr_saved_scanout;
 static uint32_t tsr_saved_ticks,tsr_saved_scans,tsr_saved_acks;
 static int tsr_boot_active;
+static uint32_t tsr_opm_isr_address;
 /* X68000 16x16 gaiji glyphs $7670-$7675: pristine font RAM starts blank. */
 static uint8_t tsr_gaiji[6][32];
 #endif
@@ -305,6 +306,7 @@ void pwp_mu_reset(void) {
   tsr_saved_cycles=tsr_saved_vdisp=tsr_saved_scanout=0;
   tsr_saved_ticks=tsr_saved_scans=tsr_saved_acks=0;
   tsr_boot_active=0;
+  tsr_opm_isr_address=0;
   memset(tsr_gaiji,0,sizeof(tsr_gaiji));
 #endif
   pwp_guest_cycles=0;
@@ -661,6 +663,14 @@ int32_t pwp_mu_dispatch(void) {
   if(blocked_op==0x4e4fu) {
     const uint32_t fn=m68k_get_reg(NULL,M68K_REG_D0)&0xffu;
 #ifdef PWP_EXPERIMENTAL_ZM2
+    if(tsr_boot_active && fn==0x6au) { /* IOCS _OPMINTST: register REAL guest ISR. */
+      const uint32_t handler=m68k_get_reg(NULL,M68K_REG_A1);
+      if(handler && ((handler&1u)||!within(handler,2u)))return state=-18;
+      tsr_opm_isr_address=handler;
+      /* Registration does not fabricate a YM2151 interrupt; timer-based
+       * delivery still requires a genuine OPM timer peripheral. */
+      complete_dos(0);return state;
+    }
     if(tsr_boot_active && fn==0x81u) { /* IOCS _B_SUPER: real SR/stack banks. */
       const uint32_t target=m68k_get_reg(NULL,M68K_REG_A1);
       const uint32_t sr=m68k_get_reg(NULL,M68K_REG_SR);
