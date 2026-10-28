@@ -4,6 +4,8 @@
 name: Build and deploy Panic Player Web
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:

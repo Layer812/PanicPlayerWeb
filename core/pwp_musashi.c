@@ -642,6 +642,13 @@ int32_t pwp_mu_dispatch(void) {
       complete_dos(0); /* D0 unspecified on hardware; caller cannot rely on it. */
       return state;
     }
+    if(fn==0x7fu) { /* Standard IOCS _ONTIME: guest-clock centiseconds and days. */
+      const uint64_t cs = pwp_guest_cycles / (PWP_X68K_CPU_HZ / 100ull);
+      const uint64_t day_cs = 8640000ull;
+      m68k_set_reg(M68K_REG_D1, (uint32_t)((cs / day_cs) & 0xffffull));
+      complete_dos((int32_t)(cs % day_cs));
+      return state;
+    }
     if(fn==0x70u) { /* _MS_INIT: initialize/reset mouse subsystem. */
       mouse_initialized=1;
       mouse_cursor_visible=0;
