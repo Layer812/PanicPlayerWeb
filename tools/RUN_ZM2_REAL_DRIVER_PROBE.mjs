@@ -35,6 +35,10 @@ for(let i=0;i<20000;i++){
     const pc=wasm._pwp_mu_pc()>>>0;
     last={op:'0x'+op.toString(16),fn:'0x'+(d0&255).toString(16),
           pc:'0x'+pc.toString(16),cycles:wasm._pwp_mu_guest_cycles()};
+    if(op===0xff81 || op===0xff51){
+      last.pdb={env:'0x'+(wasm._pwp_mu_guest_peek32(0x23fd00)>>>0).toString(16),
+        empty:(wasm._pwp_mu_guest_peek8(0x23fc04)===0)};
+    }
     if(op===0xfff7){
       const sp=wasm._pwp_mu_register(15)>>>0;
       last.args={

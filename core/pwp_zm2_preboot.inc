@@ -36,6 +36,12 @@ int32_t pwp_mu_tsr_begin(uint32_t n){
   w32(ram+PWP_MCB+12u,PWP_TSR_MCB);
   ram[PWP_TSR_CMD]=0u;
   ram[PWP_TSR_CMD+1u]=0u;
+  /* Human68k _GETPDB returns the process descriptor, NOT the executable.
+   * Z-MUSIC follows PDB[0] -> environment block and starts reading at
+   * env+4. A genuine empty environment has a zero byte there. */
+  memset(ram+PWP_TSR_ENV,0,256u);
+  memset(ram+PWP_TSR_PSP,0,256u);
+  w32(ram+PWP_TSR_PSP,PWP_TSR_ENV);
   m68k_set_reg(M68K_REG_SR,0x2000u);
   m68k_set_reg(M68K_REG_A0,PWP_TSR_MCB);
   m68k_set_reg(M68K_REG_A1,image.end_address);

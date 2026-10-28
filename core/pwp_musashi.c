@@ -97,6 +97,8 @@ static uint8_t stage[PWP_HU_CAP];
 #define PWP_TSR_END 0x003c0000u
 #define PWP_TSR_STACK 0x003e0000u
 #define PWP_TSR_CMD 0x00008100u
+#define PWP_TSR_ENV 0x0023fc00u
+#define PWP_TSR_PSP 0x0023fd00u
 static uint8_t tsr_saved_context[4096];
 static uint32_t tsr_context_bytes, tsr_heap, tsr_status, tsr_steps;
 static uint64_t tsr_saved_cycles,tsr_saved_vdisp,tsr_saved_scanout;
@@ -869,7 +871,7 @@ int32_t pwp_mu_dispatch(void) {
       if(!tsr_boot_active)break;
       /* The actual ZMUSIC.X guest was loaded in its own MCB/PSP,
        * which starts 16 bytes after $23FFF0; do not synthesize metadata. */
-      complete_dos((int32_t)PWP_TSR_LOAD);break;
+      complete_dos((int32_t)PWP_TSR_PSP);break;
     case 0xfff7: { /* DOS _BUS_ERR: real bounded memory-access probe/copy. */
       if(!tsr_boot_active)break;
       /* Stack order: P2.l destination, P1.l source, SIZE.w (1/2/4).

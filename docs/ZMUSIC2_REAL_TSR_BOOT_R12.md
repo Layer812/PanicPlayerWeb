@@ -89,3 +89,14 @@ branch, and ran 2,901,376 guest cycles before `$FF81 _GETPDB` at
 `PC=$24111A`. The isolated virtual Human68k now returns the genuine
 process address `$240000` for both _GETPDB aliases `$FF81/$FF51`.
 No fake resident marker is installed and Pages stays unchanged.
+
+## R17 actual PSP + environment memory correction
+
+After _GETPDB, the first prototype returned `$240000` (HU program code)
+**as if it were a Human68k process descriptor**. The authentic driver then
+faulted at `$FFFFF8` near PC `$24C618`. The isolated boot now creates
+an independent, bounded 256-byte PDB at `$23FD00` and a real empty
+Human68k environment block at `$23FC00` (first 4 bytes are header;
+strings begin at offset +4). _GETPDB returns the PDB address and
+`PDB[0]` contains the environment pointer, matching Z-MUSIC's actual
+`search_env` routine. These regions do not overlap PANIC.X or ZMUSIC.X.
