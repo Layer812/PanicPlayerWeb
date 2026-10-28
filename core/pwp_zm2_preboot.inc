@@ -42,6 +42,14 @@ int32_t pwp_mu_tsr_begin(uint32_t n){
   memset(ram+PWP_TSR_ENV,0,256u);
   memset(ram+PWP_TSR_PSP,0,256u);
   w32(ram+PWP_TSR_PSP,PWP_TSR_ENV);
+  /* Real ZMUSIC208.X tests PCM8 via TRAP #2 vector at $88 and directly
+   * reads (vector-8). Without a default OS vector this underflows to
+   * $FFFFF8. Both defaults are guarded RAM locations without the PCM8
+   * or ZmuSiC marker; invalid opcodes fail closed if invoked. */
+  w32(ram+0x88u,0x00000408u);
+  w16(ram+0x408u,0x4afcu); /* ILLEGAL, never pretend PCM8 is installed */
+  w32(ram+0x8cu,0x00000418u);
+  w16(ram+0x418u,0x4afcu); /* ILLEGAL, genuine Z-MUSIC replaces this */
   m68k_set_reg(M68K_REG_SR,0x2000u);
   m68k_set_reg(M68K_REG_A0,PWP_TSR_MCB);
   m68k_set_reg(M68K_REG_A1,image.end_address);

@@ -100,3 +100,17 @@ Human68k environment block at `$23FC00` (first 4 bytes are header;
 strings begin at offset +4). _GETPDB returns the PDB address and
 `PDB[0]` contains the environment pointer, matching Z-MUSIC's actual
 `search_env` routine. These regions do not overlap PANIC.X or ZMUSIC.X.
+
+## R18 genuine Z-MUSIC's PCM8 detection at vector $88
+
+The corrected PDB and empty environment were valid, yet the actual CPU
+still faulted at `PC=$24C618`, physical `$FFFFF8`. Inspecting the
+original source around `set_patch` shows why: `movea.l $88.w,a0;
+move.l -8(a0),d0` checks whether PCM8 is resident **without first
+checking for a null vector**. R11 only initialized TRAP #3 ($8C), not
+TRAP #2 ($88). In isolated experimental preboot, both uninstalled
+TRAP vectors now point to separate guest-RAM default handlers ($408/$418)
+whose preceding bytes do NOT have the `PCM ` or `ZmuSiC` signature.
+The handler instruction is ILLEGAL (fail closed if invoked), not a fake
+PCM8/Z-MUSIC service. A real guest's _B_INTVCS later replaces TRAP #3.
+The default public Pages boot stays untouched.
