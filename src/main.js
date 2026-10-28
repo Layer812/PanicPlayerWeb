@@ -6,6 +6,7 @@ import {discoverGithubPans,downloadGithubPan} from './github-pan.mjs';
 import {parsePanId,resolveGithubPanId} from './pan-url.mjs';
 import {VideoOutput} from './video-output.js';
 import {AudioOutput} from './audio-output.js';
+import {recoverLinkedAudio} from './url-audio-recovery.mjs';
 import {loadEngine} from './engine-loader.js';
 import {isGuestSpaceKey,shouldIgnoreGuestSpaceTarget} from './guest-space-key.mjs';
 import {findPan16PaletteCandidates, MAX_PAN_PALETTE_SCAN} from './pan-palette-evidence.mjs';
@@ -33,6 +34,7 @@ let retainedFrame = false;
 let deliveredDisplayUpdates = 0;
 let requestedPanId = null, panLinkStatus = null, panLinkError = false;
 let linkedPanSelected = false, audioAutoplayBlocked = false;
+let audioRecoveryBusy = false;
 try { requestedPanId = parsePanId(location.search); }
 catch (e) { panLinkStatus = e?.message ?? String(e); panLinkError = true; }
 
@@ -222,16 +224,22 @@ el.clear.addEventListener('click',async()=>{
 el.prev.addEventListener('click',()=>{void jumpAndPlay(-1);});
 el.next.addEventListener('click',()=>{void jumpAndPlay(1);});
 el.play.addEventListener('click',()=>{if(playing)void stop();else void start();});
-// A normal click on the playing screen grants browser audio when autoplay was blocked.
-// No additional audio button, no muted audio simulation.
+// Browser policies can block URL audio. On a real screen click, unlock audio
+// synchronously within the gesture, then restart PANIC.X FROM THE BEGINNING.
+// Previously rendered audio was dropped, so resume-only loses the opening.
 el['screen-shell'].addEventListener('pointerdown',()=>{
-  if(!audioAutoplayBlocked || !playing)return;
-  const ready=audio.enable(); // invoked within the genuine user gesture
-  void ready.then(()=>{
-    if(audio.context?.state !== 'running')throw new Error('AudioContext is not running');
-    audioAutoplayBlocked=false;
-    message(`音声を有効化しました：${library.selected?.path??'PAN'}`);
-  }).catch(error=>message(`音声を開始できません：${error?.message??error}`,true));
+  if(!audioAutoplayBlocked || !playing || transition || audioRecoveryBusy)return;
+  audioRecoveryBusy=true;
+  void recoverLinkedAudio({
+    unlock:()=>audio.enable(),
+    isRunning:()=>audio.context?.state==='running',
+    stopKeepingAudio:()=>stop({keepAudio:true}),
+    restart:()=>start({automatic:true})
+  }).then(()=>{
+    if(playing && !audioAutoplayBlocked)
+      message(`音声付きで最初から再生：${library.selected?.path??'PAN'}`);
+  }).catch(error=>message(`音声付き再生の再開に失敗しました：${error?.message??error}`,true))
+    .finally(()=>{audioRecoveryBusy=false;});
 });
 el.repeat.addEventListener('click',()=>{repeat=!repeat;if(repeat)folderAuto=false;display();message(repeat?'現在のPANを繰り返します。':'REPEATを解除しました。');});
 el['folder-auto'].addEventListener('click',()=>{folderAuto=!folderAuto;if(folderAuto)repeat=false;display();message(folderAuto?'一覧の末尾から先頭へ戻る自動再生を有効にしました。':'FOLDER AUTOを解除しました。');});
