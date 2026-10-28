@@ -42,14 +42,19 @@ int32_t pwp_mu_tsr_begin(uint32_t n){
   memset(ram+PWP_TSR_ENV,0,256u);
   memset(ram+PWP_TSR_PSP,0,256u);
   w32(ram+PWP_TSR_PSP,PWP_TSR_ENV);
-  /* Real ZMUSIC208.X tests PCM8 via TRAP #2 vector at $88 and directly
-   * reads (vector-8). Without a default OS vector this underflows to
-   * $FFFFF8. Both defaults are guarded RAM locations without the PCM8
-   * or ZmuSiC marker; invalid opcodes fail closed if invoked. */
-  w32(ram+0x88u,0x00000408u);
-  w16(ram+0x408u,0x4afcu); /* ILLEGAL, never pretend PCM8 is installed */
-  w32(ram+0x8cu,0x00000418u);
-  w16(ram+0x418u,0x4afcu); /* ILLEGAL, genuine Z-MUSIC replaces this */
+  /* Human68k's default uninstalled TRAP #2/#3 vectors point into IPL ROM.
+   * The minimal, read-only IPL range is handled in the experimental bus
+   * without PCM8/ZmuSiC magic or callable fake service. */
+  w32(ram+0x88u,0x00ff0000u);
+  w32(ram+0x8cu,0x00ff0000u);
+  /* Standard Human68k last character-device node: NUL. This is a virtual
+   * system device-chain record, NOT a fake Z-MUSIC resident driver.
+   * ZMUSIC.X scans from $6800, checks 'NUL     ' and attribute $8024,
+   * then attaches its own driver to this legitimate end-of-chain node. */
+  memset(ram+0x6810u,0,24u);
+  w32(ram+0x6810u,0xffffffffu); /* last device */
+  w16(ram+0x6814u,0x8024u);     /* character device flags */
+  memcpy(ram+0x681eu,"NUL     ",8u);
   m68k_set_reg(M68K_REG_SR,0x2000u);
   m68k_set_reg(M68K_REG_A0,PWP_TSR_MCB);
   m68k_set_reg(M68K_REG_A1,image.end_address);

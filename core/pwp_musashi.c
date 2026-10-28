@@ -216,11 +216,21 @@ static void invalid_bus(uint32_t address) {
 static uint32_t physical24(uint32_t a) {return a & 0x00ffffffu;}
 static int address8(uint32_t a, int for_write) {
   a=physical24(a);
+#ifdef PWP_EXPERIMENTAL_ZM2
+  if(!for_write && (tsr_boot_active || tsr_status==2u) &&
+     a>=0x00fefff0u && a<0x00ff0020u)return 1;
+#endif
   return within(a,1)||(for_write?pwp_bus_writable8(a):pwp_bus_access8(a));
 }
 static int busread(uint32_t a,uint8_t *value) {
   a=physical24(a);
   if(within(a,1)){*value=ram[a];return 1;}
+#ifdef PWP_EXPERIMENTAL_ZM2
+  /* Minimal IPL ROM window: readable signatures before default trap
+   * vectors, but no emulated resident driver or executable ROM service. */
+  if((tsr_boot_active || tsr_status==2u) &&
+     a>=0x00fefff0u && a<0x00ff0020u){*value=0;return 1;}
+#endif
   return pwp_bus_read8(a,value);
 }
 static int buswrite(uint32_t a,uint8_t v) {
@@ -651,6 +661,28 @@ int32_t pwp_mu_dispatch(void) {
   if(blocked_op==0x4e4fu) {
     const uint32_t fn=m68k_get_reg(NULL,M68K_REG_D0)&0xffu;
 #ifdef PWP_EXPERIMENTAL_ZM2
+    if(tsr_boot_active && fn==0x81u) { /* IOCS _B_SUPER: real SR/stack banks. */
+      const uint32_t target=m68k_get_reg(NULL,M68K_REG_A1);
+      const uint32_t sr=m68k_get_reg(NULL,M68K_REG_SR);
+      if(!target) {
+        if(sr&0x2000u){complete_dos(-1);return state;}
+        const uint32_t old=m68k_get_reg(NULL,M68K_REG_ISP);
+        const uint32_t usp=m68k_get_reg(NULL,M68K_REG_USP);
+        if((old&1u)||!within(old,1u)||!within(usp,1u))return state=-18;
+        m68k_set_reg(M68K_REG_SR,sr|0x2000u);
+        m68k_set_reg(M68K_REG_USP,usp);
+        m68k_set_reg(M68K_REG_ISP,usp);
+        complete_dos((int32_t)old);return state;
+      }
+      if(!(sr&0x2000u)||(target&1u)||!within(target,1u))
+        return state=-18;
+      const uint32_t usp=m68k_get_reg(NULL,M68K_REG_USP);
+      if((usp&1u)||!within(usp,1u))return state=-18;
+      m68k_set_reg(M68K_REG_SR,sr&~0x2000u);
+      m68k_set_reg(M68K_REG_ISP,target);
+      m68k_set_reg(M68K_REG_USP,usp);
+      complete_dos(0);return state;
+    }
     if(tsr_boot_active && fn==0x19u) { /* IOCS _FNTGET, documented D1/A1 ABI. */
       const uint32_t d1=m68k_get_reg(NULL,M68K_REG_D1);
       const uint32_t code=d1&0xffffu;

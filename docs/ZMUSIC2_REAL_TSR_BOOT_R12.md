@@ -124,3 +124,18 @@ The isolated runtime now implements _FPUTS using the actual guest string,
 only stdout/stderr handles, strict RAM/NUL validation, and the existing
 bounded Human68k console buffer. No invented text or driver status.
 CI requires an additional real guest service beyond this call.
+
+## R20 minimal IPL default vectors and NUL character device
+
+The authentic ZMUSIC208.X reported `MUSIC BIOS has already been included
+in your system.` after returning from DOS _FPUTS, then requested IOCS
+`_B_SUPER`. The prior synthetic RAM-based TRAP defaults were incorrectly
+being treated as preexisting drivers because they were below `$C00000`.
+Experimental boot now places absent TRAP2/TRAP3 vectors in IPL ROM at
+`$FF0000`, implements a read-only minimal IPL signature window
+`$FEFFF0..$FF001F`, and leaves invalid ROM execution fail-closed.
+The real Human68k NUL device-chain node at `$6810` is installed with
+attribute `$8024`, name `NUL     `, and end-of-list pointer `-1`;
+this is a system device, **not** Z-MUSIC residency. IOCS _B_SUPER now
+uses the actual 68000 SR, USP and ISP banks. Pages production remains
+unmodified.
