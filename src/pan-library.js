@@ -86,6 +86,8 @@ export class PanLibrary {
     finally {this.#pending.delete(id);}
   }
 
+  clearSelection() { this.#current = null; }
+
   select(id) {
     if (!this.#items.some(x => x.id === id)) return false;
     this.#current = id;

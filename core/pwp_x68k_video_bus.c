@@ -235,7 +235,7 @@ int pwp_bus_g_clr_on10(void) {
     bus_clear(pal,0x200u); /* graphic palette registers only */
     graphics_access_page=0u;
     graphics_display_enabled=1u;
-    vc[2][0]=0;vc[2][1]=1u; /* VC R2 G0 on, no false sprite/text enable */
+    vc[2][0]=0;vc[2][1]=0x2fu; /* G0/G1/TEXT enabled for layered PAN; sprite/BG separately gated by _SP_ON. */
     ++graphics_clears;
     return 1;
 }

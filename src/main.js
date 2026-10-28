@@ -3,6 +3,7 @@
 // Third-party components and .PAN media retain separate notices.
 import {PanLibrary} from './pan-library.js';
 import {discoverGithubPans,downloadGithubPan} from './github-pan.mjs';
+import {parsePanId,resolveGithubPanId} from './pan-url.mjs';
 import {VideoOutput} from './video-output.js';
 import {AudioOutput} from './audio-output.js';
 import {loadEngine} from './engine-loader.js';
@@ -30,6 +31,9 @@ let generation = 0;
 let firstVisible = false;
 let retainedFrame = false;
 let deliveredDisplayUpdates = 0;
+let requestedPanId = null, panLinkStatus = null, panLinkError = false;
+try { requestedPanId = parsePanId(location.search); }
+catch (e) { panLinkStatus = e?.message ?? String(e); panLinkError = true; }
 
 video.blank();
 
@@ -106,7 +110,11 @@ async function start({automatic=false}={}) {
   try {
     // Manual PLAY enables audio synchronously from the click gesture.
     // Automatic next/repeat shares that granted AudioContext.
-    if (!automatic) await audio.enable();
+    if (!automatic) {
+      await audio.enable(); // PLAY user gesture unlocks Web Audio.
+      if (audio.context?.state !== 'running')
+        throw new Error('PLAY操作でブラウザ音声を有効化できませんでした');
+    }
     // No PAN bytes are downloaded automatically. A PLAY/PREV/NEXT action
     // fetches the selected entry from the fixed repository, then verifies it.
     if(item.remote && !item.file) {
@@ -255,12 +263,33 @@ void discoverGithubPans().then(entries => {
   el['github-status'].textContent = entries.length ?
     `GitHub pan/: ${entries.length}件を検出（PLAY時に取得）` :
     'GitHub pan/: PAN未登録';
+  if (requestedPanId !== null) {
+    try {
+      const found = resolveGithubPanId(entries,requestedPanId);
+      const entry = library.entries.find(item => item.remote?.sha === found.sha &&
+        item.remote?.name === found.name && item.remote?.size === found.size);
+      if (!entry) throw new Error(`指定PAN「${requestedPanId}」を登録できませんでした。`);
+      library.select(entry.id);
+      panLinkStatus = `GitHub PAN: ${found.name} を選択しました。PLAYで映像と音声を再生します。`;
+      panLinkError = false;
+      diagnostics.chooseFile(library.selected);renderDiagnostics();
+      // SHA-checked, size-limited download happens only on PLAY.
+    } catch (e) {
+      library.clearSelection();panLinkStatus = e?.message ?? String(e);panLinkError = true;
+    }
+  } else if (panLinkError) library.clearSelection();
   display();
-  if (added && !diagnostics.file && library.selected) {
+  if (panLinkStatus) message(panLinkStatus,panLinkError);
+  else if (added && !diagnostics.file && library.selected) {
     diagnostics.chooseFile(library.selected);renderDiagnostics();
   }
 }).catch(error => {
   el['github-status'].textContent = 'GitHub pan/: 取得できません（ローカル再生は利用可能）';
+  if (requestedPanId !== null || panLinkError) {
+    library.clearSelection();display();
+    panLinkStatus = panLinkError ? panLinkStatus : `PAN「${requestedPanId}」のGitHub一覧を取得できません。`;
+    panLinkError = true;message(panLinkStatus,true);
+  }
 });
 const result=await loadEngine({
   readPan:(id,offset,length)=>library.readRange(id,offset,length),
@@ -308,7 +337,7 @@ const result=await loadEngine({
 engine=result.engine;
 el['overlay-title'].textContent=engine?'EXPERIMENTAL CPU CORE':'PLAYBACK CORE NOT CONNECTED';
 el['overlay-description'].textContent=engine?'実Musashi / 映像 / ADPCM音声の試験実装。実再生の完全互換性は未検証です。':'ブラウザ側のPANファイラーは動作しますが、PANICの完全な再生コアは未完成です。';
-message(engine?'PANファイルを選択してください。':result.reason,!engine);
+message(panLinkStatus ?? (engine?'PANファイルを選択してください。':result.reason),panLinkError || !engine);
 if(!engine){diagnostics.finish('異常停止',result.reason);renderDiagnostics();byId('diagnostics').open=true;}
 display();
 
@@ -331,7 +360,7 @@ if (new URLSearchParams(location.search).get('autoload')==='1') {
     library.select(localEntry.id);
     display();
     if (!engine) throw new Error(result.reason || '実Musashi未接続');
-    await start({automatic:true});
+    message(`選択済み：${actualFile.name}。PLAYを押すと映像と音声を再生します。`);
   } catch (e) {
     diagnostics.finish('異常停止',`自動読込: ${e?.message??e}`);renderDiagnostics();byId('diagnostics').open=true;
     message(`自動再生を開始できませんでした: ${e?.message??e}`,true);
