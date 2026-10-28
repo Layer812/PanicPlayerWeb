@@ -47,6 +47,15 @@ jobs:
           python tools/BUILD_R12_ACTUAL.py --x68ktab-root "$GITHUB_WORKSPACE/_x68ktab"
           test -s core/pwp_musashi.wasm
           test -s core/PANIC.X
+      - name: Real Musashi resident boot, verified ZMUSIC208.X (isolated; not deployed)
+        run: |
+          curl --fail --location --silent --show-error --retry 3 \
+            https://raw.githubusercontent.com/toyoshim/z-music.js/fd6ad1c1db9edcf973283597e2c95cedf17eb701/x/ZMUSIC208.X \
+            --output "$RUNNER_TEMP/ZMUSIC208.X"
+          test "$(git hash-object "$RUNNER_TEMP/ZMUSIC208.X")" = "4a4d88b3a620694cad3f27739e5b6a4d70cfbbbf"
+          python tools/BUILD_R12_ACTUAL.py --x68ktab-root "$GITHUB_WORKSPACE/_x68ktab" \
+            --experimental-zmusic --zmusic-driver "$RUNNER_TEMP/ZMUSIC208.X"
+
       - name: Upload private-replay-capable WASM (no PAN file or PANIC.X)
         uses: actions/upload-artifact@v4
         with:

@@ -1,0 +1,47 @@
+# Z-MUSIC 2.08: R12 experimental real-CPU TSR preboot
+
+Status: **CPU boot prototype; NOT resident production driver or audio playback**.
+
+## What runs
+With `--experimental-zmusic` only, the real pinned Tab5-derived Musashi
+runs a second HU/X guest at `$240000` in the same 4 MiB RAM as PANIC.X.
+The original PANIC.X CPU context is saved, a separate bounded process memory
+control block is created, and the real 68000 program runs until DOS/IOCS.
+
+The experimental guest can register genuine interrupt vectors via IOCS
+`_B_INTVCS` and allocate bounded guest-only memory. On actual guest
+`DOS _KEEPPR`, the loader requires the *real guest* to have installed a
+valid TRAP #3 vector and 2.xx `ZmuSiC` identifier; only then are driver RAM,
+vector and allocations preserved and the original PANIC.X CPU context
+restored. No magic marker, trap handler or music is injected by the host.
+
+A synthetic test program executes MOVEQ/MOVEA/TRAP #15 and _KEEPPR on
+actual Musashi WASM and checks the real guest vector, CPU restoration and
+continued execution of PANIC.X.
+
+## Real ZMUSIC208.X evidence
+CI independently fetches the 56,310-byte authentic ZMUSIC208.X from
+`toyoshim/z-music.js` pinned Git commit
+`fd6ad1c1db9edcf973283597e2c95cedf17eb701` and Git blob
+`4a4d88b3a620694cad3f27739e5b6a4d70cfbbbf`.
+The actual 68000 program is loaded with the strict HU relocation engine
+and stepped to its first unsupported/implemented service boundary.
+
+The current minimal Human68k adapter is expected to lack DOS/IOCS services
+needed by the real Z-MUSIC driver (_OPMINTST, timers, _B_SUPER, etc.).
+The output records exact guest PC, intercepted call, status and fault,
+**never** calls this a full Z-MUSIC boot pass on an unsupported call.
+
+No Z-MUSIC executable or third-party sound core is committed or deployed.
+The experimental code is behind `PWP_EXPERIMENTAL_ZM2` and is absent from
+the default Pages Emscripten build. The experimental artifact is kept
+inside a temporary build directory, never written to the deployed `core/`.
+
+References:
+- https://github.com/kg68k/zmusic2 — original Z-MUSIC v2.08 sources
+- https://github.com/toyoshim/z-music.js — existing real driver web port
+- https://github.com/yagennankoz/panicCreationKitForWin — guest `zm_chk`
+- https://github.com/Layer812/PanicPlayerWeb/issues/8 — remaining requirements
+
+**Not yet delivered**: real ZMUSIC208.X successful _KEEPPR on the same
+guest CPU, YM2151 timer interrupt/OPM sound output, `denkozm.pan` BGM.

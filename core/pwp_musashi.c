@@ -8,6 +8,9 @@
 #include <string.h>
 #include "m68k.h"
 #include "pwp_x68k_video_bus.h"
+#ifdef PWP_EXPERIMENTAL_ZM2
+#include "pwp_hu_resident.h"
+#endif
 
 #define PWP_RAM_BYTES (4u * 1024u * 1024u)
 #define PWP_HU_CAP (1024u * 1024u)
@@ -87,6 +90,19 @@ void pwp_mu_test_advance_cycles(uint32_t delta) { pwp_advance_vdisp(delta); }
 
 
 static uint8_t stage[PWP_HU_CAP];
+#ifdef PWP_EXPERIMENTAL_ZM2
+/* Guest-side real CPU resident preboot, disabled in Pages production. */
+#define PWP_TSR_MCB 0x0023fff0u
+#define PWP_TSR_LOAD 0x00240000u
+#define PWP_TSR_END 0x003c0000u
+#define PWP_TSR_STACK 0x003e0000u
+#define PWP_TSR_CMD 0x00008100u
+static uint8_t tsr_saved_context[4096];
+static uint32_t tsr_context_bytes, tsr_heap, tsr_status, tsr_steps;
+static uint64_t tsr_saved_cycles,tsr_saved_vdisp,tsr_saved_scanout;
+static uint32_t tsr_saved_ticks,tsr_saved_scans,tsr_saved_acks;
+static int tsr_boot_active;
+#endif
 static uint32_t size_image, size_bss, guest_steps, blocked_at, fault_addr;
 static uint16_t blocked_op;
 /* 0 reset; 1 active; 2 pending DOS/IOCS trap; 3 host read pending;
@@ -270,6 +286,12 @@ void pwp_mu_reset(void) {
   w32(ram+0x8cu,0x00ff0000u);
   pwp_bus_reset();
   size_image=size_bss=guest_steps=blocked_at=fault_addr=0;
+#ifdef PWP_EXPERIMENTAL_ZM2
+  tsr_context_bytes=tsr_heap=tsr_status=tsr_steps=0;
+  tsr_saved_cycles=tsr_saved_vdisp=tsr_saved_scanout=0;
+  tsr_saved_ticks=tsr_saved_scans=tsr_saved_acks=0;
+  tsr_boot_active=0;
+#endif
   pwp_guest_cycles=0;
   pwp_next_vdisp=PWP_ACTIVE_CYCLES;
   pwp_next_scanout=PWP_VDISP_CYCLES;
@@ -606,6 +628,9 @@ static int virtual_file_match(const char *raw) {
   if(strchr(p,'/')||strchr(p,'\\')||strchr(p,':'))return 0;
   return virtual_name_match(p);
 }
+#ifdef PWP_EXPERIMENTAL_ZM2
+#include "pwp_zm2_preboot.inc"
+#endif
 /* Human68k passes the most recently pushed arguments first on the user
  * stack, in big-endian word/longword slots. Malformed guest pointers fail
  * with a DOS-style error and never access outside guest RAM. */
@@ -620,6 +645,20 @@ int32_t pwp_mu_dispatch(void) {
    * are implemented. Other IOCS calls fail closed. */
   if(blocked_op==0x4e4fu) {
     const uint32_t fn=m68k_get_reg(NULL,M68K_REG_D0)&0xffu;
+#ifdef PWP_EXPERIMENTAL_ZM2
+    if(tsr_boot_active && fn==0x80u) { /* Guest IOCS _B_INTVCS. */
+      const uint32_t vec=m68k_get_reg(NULL,M68K_REG_D1)&0xffffu;
+      const uint32_t new_addr=m68k_get_reg(NULL,M68K_REG_A1);
+      uint32_t old;
+      if((new_addr&1u)||!within(new_addr,2))return state=-18;
+      if(vec<256u){
+        old=u32(ram+vec*4u);w32(ram+vec*4u,new_addr);
+      }else if(vec>=0x100u && vec<=0x1ffu){
+        old=iocs_vectors[vec-0x100u];iocs_vectors[vec-0x100u]=new_addr;
+      }else return state=-18;
+      complete_dos((int32_t)old);return state;
+    }
+#endif
     if(fn==0x67u) { /* _ADPCMMOD: D1.L stop=0, pause=1, resume=2. */
       const uint32_t control=m68k_get_reg(NULL,M68K_REG_D1);
       if(control>2u){complete_dos(-1);return state;}
@@ -809,6 +848,17 @@ int32_t pwp_mu_dispatch(void) {
        * Do not silently consume unsupported controls. */
       break;
     }
+#ifdef PWP_EXPERIMENTAL_ZM2
+    case 0xff31: /* DOS _KEEPPR: real driver must install TRAP #3 first. */
+      if(tsr_boot_active) {
+        if(!within(sp,6u))return state=-18;
+        const uint32_t length=u32(ram+sp);
+        const uint16_t code=u16(ram+sp+4u);
+        if(code || length>PWP_TSR_END-PWP_TSR_LOAD)return state=-18;
+        return pwp_mu_tsr_keeppr(length);
+      }
+      break;
+#endif
     case 0xff00: /* _EXIT: finish process with no error. */
       pan_open=0; pan_pos=0; process_exit_code=0;
       state=4;
@@ -912,7 +962,11 @@ int32_t pwp_mu_dispatch(void) {
       break;
     case 0xff48: /* _MALLOC(size.l) */
       if(!within(sp,4))return state=-8;
+#ifdef PWP_EXPERIMENTAL_ZM2
+      complete_dos(tsr_boot_active ? pwp_mu_tsr_malloc(u32(ram+sp)) : malloc_guest(u32(ram+sp)));
+#else
       complete_dos(malloc_guest(u32(ram+sp)));
+#endif
       break;
     case 0xff49: /* _MFREE(ptr.l) */
       if(!within(sp,4))return state=-8;

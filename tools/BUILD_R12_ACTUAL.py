@@ -91,6 +91,8 @@ def compile_and_test(opts, source, x):
     if not emcc: raise RuntimeError('Emscripten emcc unavailable; actual WASM build was NOT attempted')
     if not node: raise RuntimeError('Node.js unavailable; real CPU execution cannot be verified')
     src_manifest=manifest(source)  # missing files STOP before any build publication
+    if opts.experimental_zmusic and not (ROOT/'core'/'pwp_zm2_preboot.inc').is_file():
+        raise RuntimeError('Experimental boot source absent')
     # Actual source files and local source itself are NEVER edited. Two
     # temporary directories in R12 isolate input snapshot and output stage.
     vendor=ROOT/'vendor'; vendor.mkdir(exist_ok=True)
@@ -106,15 +108,18 @@ def compile_and_test(opts, source, x):
         patch_record = patch_private_copy(snap/'m68kcpu.c')
         print('PASS isolated non-ESP fetch restoration:', patch_record, flush=True)
         out=work/'pwp_musashi.mjs'
-        cmd=[emcc,'-O2','-std=gnu11','-I',snap,'-I',snap/'softfloat',
+        exports=EXPORTS+(['pwp_mu_tsr_begin','pwp_mu_tsr_phase','pwp_mu_tsr_steps'] if opts.experimental_zmusic else [])
+        flags=['-DPWP_EXPERIMENTAL_ZM2=1'] if opts.experimental_zmusic else []
+        sources=[ROOT/'core'/'pwp_hu_resident.c'] if opts.experimental_zmusic else []
+        cmd=[emcc,'-O2','-std=gnu11','-I',snap,'-I',snap/'softfloat',*flags,
              '-DPWP_TAB5_MUSASHI=1',
              '-sMODULARIZE=1','-sEXPORT_ES6=1','-sENVIRONMENT=web,worker,node',
              '-sALLOW_MEMORY_GROWTH=1','-sINITIAL_MEMORY=33554432',
              '-sMAXIMUM_MEMORY=67108864','-sFILESYSTEM=0',
-             '-sEXPORTED_FUNCTIONS='+str(['_'+n for n in EXPORTS]).replace(' ','').replace('"',"'"),
+             '-sEXPORTED_FUNCTIONS='+str(['_'+n for n in exports]).replace(' ','').replace('"',"'"),
              '-sEXPORTED_RUNTIME_METHODS=["HEAPU8"]','--no-entry',
              ROOT/'core'/'pwp_musashi.c',ROOT/'core'/'pwp_x68k_video_bus.c',
-             ROOT/'core'/'pwp_x68k_frame.c',snap/'m68kcpu.c',snap/'m68kops.c',
+             ROOT/'core'/'pwp_x68k_frame.c',*sources,snap/'m68kcpu.c',snap/'m68kops.c',
              snap/'softfloat'/'softfloat.c','-lm','-o',out]
         invoke(cmd)
         wasm=out.with_suffix('.wasm')
@@ -123,6 +128,12 @@ def compile_and_test(opts, source, x):
         # No fake CPU is ever accepted. The genuine code must execute a
         # synthetic HU AND the authentic PANIC.X up to the first DOS service.
         invoke([node,ROOT/'tools'/'RUN_R9_CPU_SMOKE.mjs',out])
+        if opts.experimental_zmusic:
+            invoke([node,ROOT/'tools'/'RUN_ZM2_REAL_TSR_CPU.mjs',out])
+            if opts.zmusic_driver:
+                invoke([node,ROOT/'tools'/'RUN_ZM2_REAL_DRIVER_PROBE.mjs',out,opts.zmusic_driver])
+            print('PASS isolated genuine Musashi TSR boot API; real ZMUSIC residency is NOT yet claimed')
+            return  # Never publish experimental WASM to core/ or GitHub Pages.
         invoke([node,ROOT/'tools'/'RUN_R9_PANIC_BOOT.mjs',out,x])
         invoke([node,ROOT/'tools'/'RUN_R14_WASM_GUEST_IO.mjs',out])
         invoke([node,ROOT/'tools'/'RUN_R16_FIX4_SUPER_CPU.mjs',out,x])
@@ -178,6 +189,8 @@ def main():
     a=argparse.ArgumentParser(description=__doc__)
     a.add_argument('--x68ktab-root',help='Read-only X68KTab5 source checkout (e.g. G:\\X68KTab5)')
     a.add_argument('--tab5-musashi-source',help='Read-only directory that holds m68kcpu.c/m68kops.c')
+    a.add_argument('--experimental-zmusic',action='store_true',help='Isolated real TSR boot; not Pages')
+    a.add_argument('--zmusic-driver',help='Hash-verified real ZMUSIC208.X for boot observation')
     a.add_argument('--panic-source',help='Local src/panic_x_bin.c, read-only')
     a.add_argument('--panic-x',help='Authentic original PANIC.X, read-only')
     opts=a.parse_args()
