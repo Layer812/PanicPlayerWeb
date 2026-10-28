@@ -24,6 +24,7 @@ put(file);
 const begun=wasm._pwp_mu_tsr_begin(file.length);
 if(begun!==1)throw new Error('Actual ZMUSIC208.X staging refused: '+begun);
 let completed=0, calls=0, status=1, last=null;
+const services=[];
 for(let i=0;i<20000;i++){
   const current=wasm._pwp_mu_run(512);
   if(current===1){status=1;continue;}
@@ -34,6 +35,7 @@ for(let i=0;i<20000;i++){
     const pc=wasm._pwp_mu_pc()>>>0;
     last={op:'0x'+op.toString(16),fn:'0x'+(d0&255).toString(16),
           pc:'0x'+pc.toString(16),cycles:wasm._pwp_mu_guest_cycles()};
+    if(services.length<32)services.push({...last});
     const dispatched=wasm._pwp_mu_dispatch();
     if(dispatched===1){
       if(wasm._pwp_mu_tsr_phase()===2){completed=1;status=1;break;}
@@ -48,7 +50,7 @@ const result={driver:'AUTHENTIC_ZMUSIC208.X',guestCpu:'REAL_MUSASHI',
   bytes:file.length,initialized:wasm._pwp_mu_tsr_phase()===2,
   completed, status,pc:'0x'+(wasm._pwp_mu_pc()>>>0).toString(16),
   fault:'0x'+(wasm._pwp_mu_fault_address()>>>0).toString(16),
-  calls, last,
+  calls, last, services,
   note:'Not a Z-MUSIC playback pass unless real _KEEPPR and guest trap-vector signature are confirmed'};
 console.log('ZMUSIC REAL BOOT EVIDENCE '+JSON.stringify(result));
-if(!calls && !completed)process.exitCode=2; // must reach an actual service boundary
+if(calls<3 && !completed)process.exitCode=2; // real driver must advance beyond _FNTGET

@@ -102,6 +102,8 @@ static uint32_t tsr_context_bytes, tsr_heap, tsr_status, tsr_steps;
 static uint64_t tsr_saved_cycles,tsr_saved_vdisp,tsr_saved_scanout;
 static uint32_t tsr_saved_ticks,tsr_saved_scans,tsr_saved_acks;
 static int tsr_boot_active;
+/* X68000 16x16 gaiji glyphs $7670-$7675: pristine font RAM starts blank. */
+static uint8_t tsr_gaiji[6][32];
 #endif
 static uint32_t size_image, size_bss, guest_steps, blocked_at, fault_addr;
 static uint16_t blocked_op;
@@ -291,6 +293,7 @@ void pwp_mu_reset(void) {
   tsr_saved_cycles=tsr_saved_vdisp=tsr_saved_scanout=0;
   tsr_saved_ticks=tsr_saved_scans=tsr_saved_acks=0;
   tsr_boot_active=0;
+  memset(tsr_gaiji,0,sizeof(tsr_gaiji));
 #endif
   pwp_guest_cycles=0;
   pwp_next_vdisp=PWP_ACTIVE_CYCLES;
@@ -646,6 +649,18 @@ int32_t pwp_mu_dispatch(void) {
   if(blocked_op==0x4e4fu) {
     const uint32_t fn=m68k_get_reg(NULL,M68K_REG_D0)&0xffu;
 #ifdef PWP_EXPERIMENTAL_ZM2
+    if(tsr_boot_active && fn==0x19u) { /* IOCS _FNTGET, documented D1/A1 ABI. */
+      const uint32_t d1=m68k_get_reg(NULL,M68K_REG_D1);
+      const uint32_t code=d1&0xffffu;
+      const uint32_t buffer=m68k_get_reg(NULL,M68K_REG_A1);
+      /* Z-MUSIC saves the six 16x16 user-definable glyphs. Preserve the
+       * genuine, initially-empty gaiji bank rather than fabricating art. */
+      if((d1>>16)!=8u || code<0x7670u || code>0x7675u ||
+         (buffer&1u) || !within(buffer,36u))return state=-18;
+      w16(ram+buffer,16u);w16(ram+buffer+2u,16u);
+      memcpy(ram+buffer+4u,tsr_gaiji[code-0x7670u],32u);
+      complete_dos(0);return state;
+    }
     if(tsr_boot_active && fn==0x80u) { /* Guest IOCS _B_INTVCS. */
       const uint32_t vec=m68k_get_reg(NULL,M68K_REG_D1)&0xffffu;
       const uint32_t new_addr=m68k_get_reg(NULL,M68K_REG_A1);

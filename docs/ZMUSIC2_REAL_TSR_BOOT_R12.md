@@ -45,3 +45,18 @@ References:
 
 **Not yet delivered**: real ZMUSIC208.X successful _KEEPPR on the same
 guest CPU, YM2151 timer interrupt/OPM sound output, `denkozm.pan` BGM.
+
+## R13 _FNTGET actual boot continuation
+
+CI's first real ZMUSIC208.X run stopped at IOCS `$19 _FNTGET`, PC
+`$2478C2`, after 1,656 guest cycles; the prior synthetic-only PASS was
+insufficient. The experimental CPU now implements the **documented**
+8x16/16x16 format for six X68000 user-defined gaiji codes
+`$7670-$7675`: 4-byte width/height header plus 32-byte bitmap,
+starting from the physically correct blank user-defined glyph bank.
+This is a genuine IOCS buffer response, not fake Z-MUSIC residency.
+
+The real driver acceptance now requires advancing beyond this blocked IOCS
+service. An ordered trace records each actual IOCS/DOS call, and unimplemented
+ones remain blocked until compatible semantics exist. Production Pages does
+not compile this experimental code.

@@ -30,36 +30,48 @@ put(guest);
 assert.equal(m._pwp_mu_load(guest.length),1);
 assert.equal(m._pwp_mu_pc()>>>0,0x10000);
 
-const code=new Uint8Array(64);
+const code=new Uint8Array(160);
 code.set([
+  0x22,0x3c,0,0x08,0x76,0x70,         // MOVE.L #$00087670,D1 (16x16 font)
+  0x22,0x7c,0,0x24,0,0x80,            // MOVEA.L #$240080,A1 (font buffer)
+  0x70,0x19,                           // MOVEQ #$19,D0: IOCS _FNTGET
+  0x4e,0x4f,                           // Actual TRAP #15
   0x72,0x23,                           // MOVEQ #35,D1 (TRAP #3 vector index)
-  0x22,0x7c,0,0x24,0,0x30,            // MOVEA.L #$240030,A1
+  0x22,0x7c,0,0x24,0,0x40,            // MOVEA.L #$240040,A1
   0x70,0x80,                           // MOVEQ #$80,D0: IOCS _B_INTVCS
   0x4e,0x4f,                           // Actual TRAP #15
   0x42,0x67,                           // CLR.W -(SP) : _KEEPPR exit code
-  0x2f,0x3c,0,0,0,0x40,                // MOVE.L #64,-(SP): bytes to remain
+  0x2f,0x3c,0,0,0,0xa0,                // MOVE.L #160,-(SP): length to remain
   0xff,0x31                            // Human68k DOS _KEEPPR
 ],0);
-code.set(new TextEncoder().encode('ZmuSiC'),0x28);
-code[0x2e]=0x20;code[0x2f]=0x80;
-code.set([0x4e,0x73],0x30);           // Real RTE at registered handler
+code.set(new TextEncoder().encode('ZmuSiC'),0x38);
+code[0x3e]=0x20;code[0x3f]=0x80;
+code.set([0x4e,0x73],0x40);           // Real RTE at registered handler
 const driver=makeHU(code);
 put(driver);
 assert.equal(m._pwp_mu_tsr_begin(driver.length),1);
 assert.equal(m._pwp_mu_tsr_phase(),1);
 assert.equal(m._pwp_mu_pc()>>>0,0x240000);
+assert.equal(m._pwp_mu_run(200),2,'real guest must reach IOCS _FNTGET');
+assert.equal(m._pwp_mu_trap()>>>0,0x4e4f);
+assert.equal(m._pwp_mu_register(0)&255,0x19);
+assert.equal(m._pwp_mu_dispatch(),1,'real gaiji font read accepted');
+assert.equal(m._pwp_mu_guest_peek32(0x240080)>>>0,0x00100010,
+  '16x16 character geometry written in authentic IOCS buffer');
+assert.equal(m._pwp_mu_guest_peek32(0x240084)>>>0,0,
+  'untouched gaiji bitmap remains blank');
 assert.equal(m._pwp_mu_run(200),2,'real guest must reach IOCS _B_INTVCS');
 assert.equal(m._pwp_mu_trap()>>>0,0x4e4f);
 assert.equal(m._pwp_mu_register(1)>>>0,35);
 assert.equal(m._pwp_mu_dispatch(),1,'actual guest vector install accepted');
-assert.equal(m._pwp_mu_guest_peek32(0x8c)>>>0,0x240030);
+assert.equal(m._pwp_mu_guest_peek32(0x8c)>>>0,0x240040);
 assert.equal(m._pwp_mu_run(200),2,'real guest must reach DOS _KEEPPR');
 assert.equal(m._pwp_mu_trap()>>>0,0xff31);
 assert.equal(m._pwp_mu_dispatch(),1,'real _KEEPPR must restore PANIC CPU');
 assert.equal(m._pwp_mu_tsr_phase(),2,'actual guest resident signature and handler verified');
 assert.ok(m._pwp_mu_tsr_steps()>=4,'real guest 68000 instructions were executed');
 assert.equal(m._pwp_mu_pc()>>>0,0x10000,'PANIC guest PC restored');
-assert.equal(m._pwp_mu_guest_peek32(0x8c)>>>0,0x240030,'real trap vector persisted');
+assert.equal(m._pwp_mu_guest_peek32(0x8c)>>>0,0x240040,'real trap vector persisted');
 assert.equal(m._pwp_mu_run(100),2,'original guest continues independently');
 assert.equal(m._pwp_mu_trap()>>>0,0xff4c);
 assert.equal(m._pwp_mu_register(0)>>>0,42);
