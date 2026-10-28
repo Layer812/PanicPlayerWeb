@@ -866,6 +866,24 @@ int32_t pwp_mu_dispatch(void) {
       break;
     }
 #ifdef PWP_EXPERIMENTAL_ZM2
+    case 0xff1e: { /* Human68k DOS _FPUTS: output to console handles. */
+      if(!tsr_boot_active)break;
+      if(!within(sp,6u)){complete_dos(-14);break;}
+      const uint32_t str=u32(ram+sp);
+      const uint16_t handle=u16(ram+sp+4u);
+      if(handle!=1u && handle!=2u){complete_dos(-6);break;}
+      if(!within(str,1u)){complete_dos(-14);break;}
+      /* Do not read arbitrary guest memory or synthesize terminal output.
+       * The actual ZMUSIC.X guest provides the exact string bytes. */
+      uint32_t n=0u;
+      while(n<65536u && within(str+n,1u) && ram[str+n])n++;
+      if(n>=65536u || !within(str+n,1u)){complete_dos(-14);break;}
+      for(uint32_t i=0;i<n;i++){
+        if(console_length<PWP_CONSOLE_CAP)console_bytes[console_length++]=ram[str+i];
+        else console_truncated=1;
+      }
+      complete_dos(0);break;
+    }
     case 0xff81: /* DOS _GETPDB: process descriptor, Human68k 3.x alias. */
     case 0xff51: /* DOS _GETPDB: classic entry. */
       if(!tsr_boot_active)break;

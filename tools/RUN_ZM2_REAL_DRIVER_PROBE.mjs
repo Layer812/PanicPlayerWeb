@@ -35,6 +35,18 @@ for(let i=0;i<20000;i++){
     const pc=wasm._pwp_mu_pc()>>>0;
     last={op:'0x'+op.toString(16),fn:'0x'+(d0&255).toString(16),
           pc:'0x'+pc.toString(16),cycles:wasm._pwp_mu_guest_cycles()};
+    if(op===0xff1e){
+      const sp=wasm._pwp_mu_register(15)>>>0;
+      const ptr=wasm._pwp_mu_guest_peek32(sp)>>>0;
+      const codepoints=[];
+      for(let i=0;i<80;i++){
+        const v=wasm._pwp_mu_guest_peek8(ptr+i)>>>0;
+        if(v===0 || v>255)break;
+        codepoints.push(v);
+      }
+      last.print={handle:((wasm._pwp_mu_guest_peek8(sp+4)<<8)|wasm._pwp_mu_guest_peek8(sp+5)),
+        dataHex:codepoints.map(x=>x.toString(16).padStart(2,'0')).join(' ')};
+    }
     if(op===0xff81 || op===0xff51){
       last.pdb={env:'0x'+(wasm._pwp_mu_guest_peek32(0x23fd00)>>>0).toString(16),
         empty:(wasm._pwp_mu_guest_peek8(0x23fc04)===0)};
@@ -65,4 +77,4 @@ const result={driver:'AUTHENTIC_ZMUSIC208.X',guestCpu:'REAL_MUSASHI',
   calls, last, services,
   note:'Not a Z-MUSIC playback pass unless real _KEEPPR and guest trap-vector signature are confirmed'};
 console.log('ZMUSIC REAL BOOT EVIDENCE '+JSON.stringify(result));
-if(calls<11 && !completed)process.exitCode=2; // real driver must advance beyond _FNTGET
+if(calls<13 && !completed)process.exitCode=2; // real driver must advance beyond _FNTGET

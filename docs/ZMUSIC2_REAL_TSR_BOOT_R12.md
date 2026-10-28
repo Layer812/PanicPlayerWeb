@@ -114,3 +114,13 @@ whose preceding bytes do NOT have the `PCM ` or `ZmuSiC` signature.
 The handler instruction is ILLEGAL (fail closed if invoked), not a fake
 PCM8/Z-MUSIC service. A real guest's _B_INTVCS later replaces TRAP #3.
 The default public Pages boot stays untouched.
+
+## R19 authentic DOS _FPUTS console output
+
+With safe uninstalled PCM8/TRAP #2 and TRAP #3 guest vectors, the authentic
+Z-MUSIC driver passed _GETPDB and an actual mapped-RAM _BUS_ERR check,
+reaching `DOS $FF1E _FPUTS` at `PC=$247A5C`, 2,904,402 cycles.
+The isolated runtime now implements _FPUTS using the actual guest string,
+only stdout/stderr handles, strict RAM/NUL validation, and the existing
+bounded Human68k console buffer. No invented text or driver status.
+CI requires an additional real guest service beyond this call.
