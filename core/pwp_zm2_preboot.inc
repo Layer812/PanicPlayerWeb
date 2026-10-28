@@ -50,6 +50,7 @@ int32_t pwp_mu_tsr_begin(uint32_t n){
   /* ROM IOCS defaults: original Z-MUSIC checks these vectors against
    * $C00000 before installing its own driver handlers. A zero is NOT a
    * valid default and falsely triggers 'already occupied'. */
+  w32(ram+0x10cu,0x00ff0000u); /* FM/OPM MFP vector $43; checked FIRST by original set_vect */
   w32(ram+0x228u,0x00ff0000u); /* MIDI receive vector $8A */
   w32(ram+0x1a8u,0x00ff0000u); /* MFP/ADPCM stop vector $6A */
   iocs_vectors[0xf0u]=0x00ff0000u; /* IOCS $1F0 */

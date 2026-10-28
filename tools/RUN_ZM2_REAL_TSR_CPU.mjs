@@ -53,6 +53,7 @@ assert.equal(m._pwp_mu_tsr_begin(driver.length),1);
 assert.equal(m._pwp_mu_tsr_phase(),1);
 assert.equal(m._pwp_mu_guest_peek32(0x88)>>>0,0xff0000,'PCM8 absent: IPL ROM vector');
 assert.equal(m._pwp_mu_guest_peek32(0x8c)>>>0,0xff0000,'Z-MUSIC absent: IPL ROM vector');
+assert.equal(m._pwp_mu_guest_peek32(0x10c)>>>0,0xff0000,'unclaimed FM IRQ is ROM-managed');
 assert.equal(m._pwp_mu_guest_peek32(0x228)>>>0,0xff0000,'unclaimed MIDI IRQ is ROM-managed');
 assert.equal(m._pwp_mu_guest_peek32(0x1a8)>>>0,0xff0000,'unclaimed ADPCM IRQ is ROM-managed');
 assert.equal(m._pwp_mu_guest_peek32(0x6810)>>>0,0xffffffff,'real NUL end-of-device-chain');

@@ -152,3 +152,15 @@ unclaimed hardware from a resident handler. Added ROM defaults for the
 MIDI RX vector `$228`, ADPCM stop vector `$1A8`, and IOCS `$1F0`,
 `$160`, `$167`. IOCS `_OPMINTST` now saves the real guest ISR pointer
 with range validation, without manufacturing timer events or FM audio.
+
+## R22 root cause of initial MUSIC BIOS false positive
+
+Original Z-MUSIC v2.08 `set_vect` starts by loading `a2=$FE0000` and
+comparing this threshold with the **MFP FM interrupt vector at `$10C`**
+(`cmp.l $10c.w,a2; bcs set_opmv; otherwise return D0=-1`). The minimal
+virtual OS had left this vector 0, so `set_vect` returned `-1` before
+any IOCS call and printed `MUSIC BIOS has already been included ...`.
+The earlier $228 MIDI default alone did not address this first check.
+The experimental guest now initializes `$10C` to the unmapped IPL ROM
+vector `$FF0000`; original guest code will determine whether to invoke
+IOCS `_OPMINTST` and `_B_INTVCS` rather than being forced through.
