@@ -60,3 +60,12 @@ The real driver acceptance now requires advancing beyond this blocked IOCS
 service. An ordered trace records each actual IOCS/DOS call, and unimplemented
 ones remain blocked until compatible semantics exist. Production Pages does
 not compile this experimental code.
+
+## R14 DOS _VERNUM continuation
+
+Real-driver CI successfully executes all six original _FNTGET calls, then
+stops at `PC=$24C5DC` / DOS `$FF30 _VERNUM` (3,882 guest cycles).
+The experimental loader now supplies the Human68k 3.02-compatible version
+`$36380302` on that OS query, matching the independent real Z-MUSIC web port.
+This is a **virtual OS version**, NOT a fabricated driver-resident report.
+CI requires passage beyond the version call with authentic ZMUSIC208.X.

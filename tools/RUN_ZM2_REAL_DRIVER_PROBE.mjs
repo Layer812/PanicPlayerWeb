@@ -53,4 +53,4 @@ const result={driver:'AUTHENTIC_ZMUSIC208.X',guestCpu:'REAL_MUSASHI',
   calls, last, services,
   note:'Not a Z-MUSIC playback pass unless real _KEEPPR and guest trap-vector signature are confirmed'};
 console.log('ZMUSIC REAL BOOT EVIDENCE '+JSON.stringify(result));
-if(calls<3 && !completed)process.exitCode=2; // real driver must advance beyond _FNTGET
+if(calls<9 && !completed)process.exitCode=2; // real driver must advance beyond _FNTGET

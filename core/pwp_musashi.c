@@ -864,6 +864,9 @@ int32_t pwp_mu_dispatch(void) {
       break;
     }
 #ifdef PWP_EXPERIMENTAL_ZM2
+    case 0xff30: /* DOS _VERNUM: Human68k 3.02 virtual OS version. */
+      if(!tsr_boot_active)break;
+      complete_dos((int32_t)0x36380302u);break;
     case 0xff31: /* DOS _KEEPPR: real driver must install TRAP #3 first. */
       if(tsr_boot_active) {
         if(!within(sp,6u))return state=-18;
