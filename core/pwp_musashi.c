@@ -864,6 +864,12 @@ int32_t pwp_mu_dispatch(void) {
       break;
     }
 #ifdef PWP_EXPERIMENTAL_ZM2
+    case 0xff81: /* DOS _GETPDB: process descriptor, Human68k 3.x alias. */
+    case 0xff51: /* DOS _GETPDB: classic entry. */
+      if(!tsr_boot_active)break;
+      /* The actual ZMUSIC.X guest was loaded in its own MCB/PSP,
+       * which starts 16 bytes after $23FFF0; do not synthesize metadata. */
+      complete_dos((int32_t)PWP_TSR_LOAD);break;
     case 0xfff7: { /* DOS _BUS_ERR: real bounded memory-access probe/copy. */
       if(!tsr_boot_active)break;
       /* Stack order: P2.l destination, P1.l source, SIZE.w (1/2/4).

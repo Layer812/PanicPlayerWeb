@@ -80,3 +80,12 @@ only mapped guest RAM bytes, returns 0 only for a valid access, and returns
 an address error on an invalid mapping. Unknown MMIO (such as an absent
 MIDI expansion board) is **not** assumed present. CI now requires the real
 program to pass this service, and records the actual arguments.
+
+## R16 DOS _GETPDB continuation
+
+Actual ZMUSIC208.X probed uninstalled MIDI hardware at `$EAFA07`/
+`$EAFA05` with DOS _BUS_ERR (size 1), correctly took the *no MIDI board*
+branch, and ran 2,901,376 guest cycles before `$FF81 _GETPDB` at
+`PC=$24111A`. The isolated virtual Human68k now returns the genuine
+process address `$240000` for both _GETPDB aliases `$FF81/$FF51`.
+No fake resident marker is installed and Pages stays unchanged.
