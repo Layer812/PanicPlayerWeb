@@ -32,6 +32,7 @@ let firstVisible = false;
 let retainedFrame = false;
 let deliveredDisplayUpdates = 0;
 let requestedPanId = null, panLinkStatus = null, panLinkError = false;
+let linkedPanSelected = false, audioAutoplayBlocked = false;
 try { requestedPanId = parsePanId(location.search); }
 catch (e) { panLinkStatus = e?.message ?? String(e); panLinkError = true; }
 
@@ -88,6 +89,7 @@ function display() {
 async function stop({retainFrame=false,keepAudio=false}={}) {
   if (!engine || transition) return;
   const token = ++generation;
+  audioAutoplayBlocked=false;
   transition=true;display();
   try {if(diagnostics.phase==='実行中'){diagnostics.finish('手動停止');renderDiagnostics();}await engine.stop();playing=false;if(!keepAudio)await audio.stop();if (!retainFrame) {video.blank();firstVisible=false;} retainedFrame=retainFrame && firstVisible;}
   catch (e) {message(`終了失敗: ${e?.message ?? e}`,true);}
@@ -102,15 +104,18 @@ async function choose(id) {
   if(library.selected){diagnostics.chooseFile(library.selected);renderDiagnostics();if(!library.selected.remote || library.selected.file)void fingerprintPan(library.selected,(id,pos,len)=>library.readRange(id,pos,len));}
   if (library.selected) message(`選択: ${library.selected.path}（${prettyBytes(library.selected.size)}）`);
 }
-async function start({automatic=false}={}) {
+async function start({automatic=false,linkedAutoplay=false}={}) {
   if (!engine || !library.selected || playing || transition) return;
   const item = library.selected;
   const token=++generation;
+  audioAutoplayBlocked=false;
   transition=true;display();
   try {
-    // Manual PLAY enables audio synchronously from the click gesture.
-    // Automatic next/repeat shares that granted AudioContext.
-    if (!automatic) {
+    // Only ?pan=ID starts on page load. Ordinary PLAY keeps its audio gesture.
+    // Browser auto-audio may be blocked; never hang forever on resume().
+    if (linkedAutoplay) {
+      audioAutoplayBlocked=!(await audio.tryAutoplay(800));
+    } else if (!automatic) {
       await audio.enable(); // PLAY user gesture unlocks Web Audio.
       if (audio.context?.state !== 'running')
         throw new Error('PLAY操作でブラウザ音声を有効化できませんでした');
@@ -138,7 +143,9 @@ async function start({automatic=false}={}) {
     diagnostics.begin();renderDiagnostics();
     await engine.start();
     playing = true;
-    message(`再生中：${item.path}`);
+    message(audioAutoplayBlocked
+      ? `映像再生中：${item.path}。ブラウザが音声自動再生を制限しています。音を出すには再生画面をクリックしてください。`
+      : `再生中：${item.path}`);
   } catch (e) {
     playing=false;
     diagnostics.finish('異常停止',e?.message??String(e));renderDiagnostics();byId('diagnostics').open=true;
@@ -215,6 +222,17 @@ el.clear.addEventListener('click',async()=>{
 el.prev.addEventListener('click',()=>{void jumpAndPlay(-1);});
 el.next.addEventListener('click',()=>{void jumpAndPlay(1);});
 el.play.addEventListener('click',()=>{if(playing)void stop();else void start();});
+// A normal click on the playing screen grants browser audio when autoplay was blocked.
+// No additional audio button, no muted audio simulation.
+el['screen-shell'].addEventListener('pointerdown',()=>{
+  if(!audioAutoplayBlocked || !playing)return;
+  const ready=audio.enable(); // invoked within the genuine user gesture
+  void ready.then(()=>{
+    if(audio.context?.state !== 'running')throw new Error('AudioContext is not running');
+    audioAutoplayBlocked=false;
+    message(`音声を有効化しました：${library.selected?.path??'PAN'}`);
+  }).catch(error=>message(`音声を開始できません：${error?.message??error}`,true));
+});
 el.repeat.addEventListener('click',()=>{repeat=!repeat;if(repeat)folderAuto=false;display();message(repeat?'現在のPANを繰り返します。':'REPEATを解除しました。');});
 el['folder-auto'].addEventListener('click',()=>{folderAuto=!folderAuto;if(folderAuto)repeat=false;display();message(folderAuto?'一覧の末尾から先頭へ戻る自動再生を有効にしました。':'FOLDER AUTOを解除しました。');});
 el.fullscreen.addEventListener('click',async()=>{
@@ -258,7 +276,7 @@ el['drop-zone'].addEventListener('drop',event=>{
 
 display();
 // Metadata-only discovery. 404 = no hosted folder yet; no change to local UI.
-void discoverGithubPans().then(entries => {
+const githubPanListing = discoverGithubPans().then(entries => {
   const added = library.addGithubPans(entries);
   el['github-status'].textContent = entries.length ?
     `GitHub pan/: ${entries.length}件を検出（PLAY時に取得）` :
@@ -270,11 +288,13 @@ void discoverGithubPans().then(entries => {
         item.remote?.name === found.name && item.remote?.size === found.size);
       if (!entry) throw new Error(`指定PAN「${requestedPanId}」を登録できませんでした。`);
       library.select(entry.id);
-      panLinkStatus = `GitHub PAN: ${found.name} を選択しました。PLAYで映像と音声を再生します。`;
+      linkedPanSelected=true;
+      panLinkStatus = `GitHub PAN: ${found.name} を自動再生します。`;
       panLinkError = false;
       diagnostics.chooseFile(library.selected);renderDiagnostics();
       // SHA-checked, size-limited download happens only on PLAY.
     } catch (e) {
+      linkedPanSelected=false;
       library.clearSelection();panLinkStatus = e?.message ?? String(e);panLinkError = true;
     }
   } else if (panLinkError) library.clearSelection();
@@ -286,6 +306,7 @@ void discoverGithubPans().then(entries => {
 }).catch(error => {
   el['github-status'].textContent = 'GitHub pan/: 取得できません（ローカル再生は利用可能）';
   if (requestedPanId !== null || panLinkError) {
+    linkedPanSelected=false;
     library.clearSelection();display();
     panLinkStatus = panLinkError ? panLinkStatus : `PAN「${requestedPanId}」のGitHub一覧を取得できません。`;
     panLinkError = true;message(panLinkStatus,true);
@@ -340,6 +361,15 @@ el['overlay-description'].textContent=engine?'実Musashi / 映像 / ADPCM音声�
 message(panLinkStatus ?? (engine?'PANファイルを選択してください。':result.reason),panLinkError || !engine);
 if(!engine){diagnostics.finish('異常停止',result.reason);renderDiagnostics();byId('diagnostics').open=true;}
 display();
+// GitHub listing and the Musashi engine load concurrently. Start a linked PAN
+// only once BOTH are ready; no ?pan means no automatic playback or download.
+void githubPanListing.then(()=>{
+  if(linkedPanSelected && requestedPanId && !panLinkError && engine &&
+     library.selected?.remote?.source === 'github' &&
+     library.selected.name.toLowerCase() === (requestedPanId+'.pan').toLowerCase()) {
+    void start({automatic:true,linkedAutoplay:true});
+  }
+});
 
 // Local-only one-click launch. The explicit PAN remains on the user's disk;
 // the 127.0.0.1 server reads it and never writes into the source directory.

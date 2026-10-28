@@ -9,6 +9,18 @@ export class AudioOutput {
     if (this.context.state === 'suspended') await this.context.resume();
     this.cursor = Math.max(this.cursor, this.context.currentTime);
   }
+  async tryAutoplay(timeoutMs=800) {
+    // A suspended AudioContext.resume() can remain pending until a gesture.
+    // Try audible autoplay, but never stall video for that unresolved promise.
+    let timer;
+    try {
+      const attempt=this.enable().then(()=>true,()=>false);
+      await Promise.race([attempt,new Promise(resolve=>{
+        timer=setTimeout(()=>resolve(false),timeoutMs);
+      })]);
+      return this.context?.state === 'running';
+    } finally {clearTimeout(timer);}
+  }
   enqueue(interleaved, sampleRate, channels=2) {
     if (!this.context || this.context.state !== 'running') return false;
     if (!(interleaved instanceof Float32Array) || ![1,2].includes(channels) ||
