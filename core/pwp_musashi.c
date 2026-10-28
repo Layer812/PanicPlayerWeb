@@ -260,6 +260,14 @@ uint32_t pwp_mu_stage_ptr(void) {return (uint32_t)(uintptr_t)stage;}
 uint32_t pwp_mu_stage_capacity(void) {return PWP_HU_CAP;}
 void pwp_mu_reset(void) {
   memset(ram,0,sizeof(ram));
+  /* A real Human68k boot leaves uninstalled TRAP vectors pointing outside
+   * user RAM (firmware). Zero here is unsafe: Z-MUSIC v2's standard presence
+   * probe reads vector $8C, subtracts 8 and otherwise dereferences $FFFFF8.
+   * Use an UNHANDLED ROM-range target so the guest correctly concludes
+   * Z-MUSIC is absent. It is NOT a resident marker, driver or callable stub.
+   * Actual trap #3 without a driver remains an unmapped, fail-closed access.
+   * When a real driver later registers vector 35, this value is replaced. */
+  w32(ram+0x8cu,0x00ff0000u);
   pwp_bus_reset();
   size_image=size_bss=guest_steps=blocked_at=fault_addr=0;
   pwp_guest_cycles=0;
