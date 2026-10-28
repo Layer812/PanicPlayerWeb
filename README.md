@@ -56,3 +56,15 @@ py -3 tools\START_PLAY.py --source "G:\X68KTab5" --pan "G:\MyPAN\example.PAN"
 本リポジトリのMITライセンスは、**Layer812が権利を持つ新規実装部分にのみ**適用され、第三者のコード・実行形式・各PANには拡張されません。
 
 PANICとX68000の文化を支え、貴重なデータを保存されてきた皆様に感謝します。
+
+
+## GitHub Pages のPAN指定URL
+
+`https://layer812.github.io/PanicPlayerWeb/?pan=denkopcm`
+
+`?pan=英数字` を指定すると、固定の公開リポジトリ `Layer812/PanicPlayerWeb/pan/` から
+対応する `.pan` / `.PAN` を検証して**自動再生**します。PAN名以外の任意URLやパスは受け付けません。
+一般のURL（`?pan` なし）はこれまでどおりPLAY操作で開始します。
+
+ブラウザの音声自動再生ポリシーによって、映像は始まっても音が制限される場合があります。
+その場合は**再生画面をクリック**すると音声が有効になります。音声ONボタンはありません。

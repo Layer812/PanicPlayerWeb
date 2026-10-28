@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT (original Layer812-owned code only)
 // Third-party components and .PAN media retain separate notices.
 /* FIX38: Only public .PAN files in Layer812/PanicPlayerWeb/pan are discoverable.
- * No arbitrary URLs, share links, cookies, upload, or automatic playback.
- * Listings are metadata-only; downloads happen when PLAY is pressed. */
+ * No arbitrary URLs, share links, cookies, or upload.
+ * Listings are metadata-only; downloads happen on PLAY or a valid ?pan=ID link. */
 const OWNER = 'Layer812';
 const REPOSITORY = 'PanicPlayerWeb';
 const BRANCH = 'main';
