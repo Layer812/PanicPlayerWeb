@@ -69,3 +69,14 @@ The experimental loader now supplies the Human68k 3.02-compatible version
 `$36380302` on that OS query, matching the independent real Z-MUSIC web port.
 This is a **virtual OS version**, NOT a fabricated driver-resident report.
 CI requires passage beyond the version call with authentic ZMUSIC208.X.
+
+## R15 DOS _BUS_ERR memory probe
+
+After _VERNUM the actual driver next calls `DOS $FFF7 _BUS_ERR`, PC
+`$24C530` (4,206 guest cycles). The isolated adapter now implements the
+real Human68k convention of SIZE.w 1/2/4 with P1/P2 source and destination
+pointers from the guest stack: validates both ranges and alignment, copies
+only mapped guest RAM bytes, returns 0 only for a valid access, and returns
+an address error on an invalid mapping. Unknown MMIO (such as an absent
+MIDI expansion board) is **not** assumed present. CI now requires the real
+program to pass this service, and records the actual arguments.

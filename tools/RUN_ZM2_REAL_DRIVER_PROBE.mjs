@@ -35,6 +35,14 @@ for(let i=0;i<20000;i++){
     const pc=wasm._pwp_mu_pc()>>>0;
     last={op:'0x'+op.toString(16),fn:'0x'+(d0&255).toString(16),
           pc:'0x'+pc.toString(16),cycles:wasm._pwp_mu_guest_cycles()};
+    if(op===0xfff7){
+      const sp=wasm._pwp_mu_register(15)>>>0;
+      last.args={
+        p2:'0x'+(wasm._pwp_mu_guest_peek32(sp)>>>0).toString(16),
+        p1:'0x'+(wasm._pwp_mu_guest_peek32(sp+4)>>>0).toString(16),
+        bytes:((wasm._pwp_mu_guest_peek8(sp+8)<<8)|wasm._pwp_mu_guest_peek8(sp+9))
+      };
+    }
     if(services.length<32)services.push({...last});
     const dispatched=wasm._pwp_mu_dispatch();
     if(dispatched===1){
@@ -53,4 +61,4 @@ const result={driver:'AUTHENTIC_ZMUSIC208.X',guestCpu:'REAL_MUSASHI',
   calls, last, services,
   note:'Not a Z-MUSIC playback pass unless real _KEEPPR and guest trap-vector signature are confirmed'};
 console.log('ZMUSIC REAL BOOT EVIDENCE '+JSON.stringify(result));
-if(calls<9 && !completed)process.exitCode=2; // real driver must advance beyond _FNTGET
+if(calls<10 && !completed)process.exitCode=2; // real driver must advance beyond _FNTGET

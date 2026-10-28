@@ -864,6 +864,23 @@ int32_t pwp_mu_dispatch(void) {
       break;
     }
 #ifdef PWP_EXPERIMENTAL_ZM2
+    case 0xfff7: { /* DOS _BUS_ERR: real bounded memory-access probe/copy. */
+      if(!tsr_boot_active)break;
+      /* Stack order: P2.l destination, P1.l source, SIZE.w (1/2/4).
+       * When a genuine guest address is readable/writable, copy exactly
+       * that number of bytes; otherwise report a guest address error.
+       * Never map arbitrary MIDI-board, host, or firmware memory. */
+      if(!within(sp,10u)){complete_dos(-14);break;}
+      const uint32_t dst=u32(ram+sp),src=u32(ram+sp+4u);
+      const uint16_t n=u16(ram+sp+8u);
+      if((n!=1u&&n!=2u&&n!=4u) ||
+         (n!=1u && ((src|dst)&1u)) ||
+         !within(src,n)||!within(dst,n)){
+        complete_dos(-14);break;
+      }
+      memmove(ram+dst,ram+src,n);
+      complete_dos(0);break;
+    }
     case 0xff30: /* DOS _VERNUM: Human68k 3.02 virtual OS version. */
       if(!tsr_boot_active)break;
       complete_dos((int32_t)0x36380302u);break;
