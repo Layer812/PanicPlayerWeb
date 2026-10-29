@@ -17,6 +17,7 @@ static uint8_t pwp_opm_ct, pwp_adpcm_playing, pwp_pia_port_c;
 /* Experimental, stateful YM2151 register file. NO AUDIO/TIMER OUTPUT. */
 static uint8_t pwp_zm2_opm_registers[256];
 static uint32_t pwp_zm2_opm_register_writes;
+#include "pwp_ym2151_timer.inc"
 #endif
 /* Audible byte FIFO preserves chronological PANIC.X PCM data and channel/rate
  * for the host decoder; no synthetic ADPCM output or dropped bytes. */
@@ -55,6 +56,9 @@ uint32_t pwp_bus_sound_overflows(void){return pwp_sound_overflows;}
 void pwp_bus_audio_advance_cycles(uint32_t cycles) {
     if(cycles >= pwp_opm_busy_remaining) pwp_opm_busy_remaining=0;
     else pwp_opm_busy_remaining-=cycles;
+#ifdef PWP_EXPERIMENTAL_ZM2
+    pwp_zm2_timer_advance(cycles);
+#endif
 }
 static void pwp_audio_reset(void) {
     pwp_opm_busy_remaining=0;
@@ -64,6 +68,7 @@ static void pwp_audio_reset(void) {
 #ifdef PWP_EXPERIMENTAL_ZM2
     for(uint32_t i=0;i<256u;i++)pwp_zm2_opm_registers[i]=0u;
     pwp_zm2_opm_register_writes=0;
+    pwp_zm2_timer_reset();
 #endif
     pwp_adpcm_playing=0;
     pwp_pia_port_c=0x0bu; /* PX68K PIA_Init() */
@@ -77,7 +82,11 @@ static int pwp_audio_read8(uint32_t addr,uint8_t *value) {
     switch(addr) {
       case OPM_DATA_PORT:
         ++pwp_opm_status_reads;
-        *value=(uint8_t)(pwp_opm_busy_remaining ? 0x80u : 0u);
+        *value=(uint8_t)(pwp_opm_busy_remaining ? 0x80u : 0u)
+#ifdef PWP_EXPERIMENTAL_ZM2
+            |pwp_zm2_timer_flags
+#endif
+            ;
         return 1;
       case PWP_ADPCM_CTRL:
         *value=(uint8_t)(pwp_adpcm_playing ? 0xc0u : 0x40u);
@@ -108,6 +117,7 @@ static int pwp_audio_write8(uint32_t addr,uint8_t value) {
          * This state does not produce FM sound or timer interrupts yet. */
         pwp_zm2_opm_registers[opm_register_latch]=value;
         ++pwp_zm2_opm_register_writes;
+        pwp_zm2_timer_write(opm_register_latch,value);
 #endif
         if(opm_register_latch==0x1bu){
             pwp_opm_ct=(uint8_t)((value>>6u)&3u);
