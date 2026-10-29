@@ -227,6 +227,16 @@ static int busread(uint32_t a,uint8_t *value) {
   a=physical24(a);
   if(within(a,1)){*value=ram[a];return 1;}
 #ifdef PWP_EXPERIMENTAL_ZM2
+  if(tsr_boot_active && a==0x00e88001u) {
+    /* X68000 MFP GPIP bit7 is H-SYNC, not a permanently high level.
+     * 15.75 kHz at a virtual 16 MHz CPU => 1016 guest cycles per line.
+     * Preserve every other MFP bit from the real emulated register. */
+    uint8_t gpip=0;
+    if(!pwp_bus_read8(a,&gpip))return 0;
+    const uint64_t phase=pwp_guest_cycles%1016ull;
+    *value=(uint8_t)((gpip&0x7fu)|(phase<508ull ? 0x80u : 0u));
+    return 1;
+  }
   /* Minimal IPL ROM window: readable signatures before default trap
    * vectors, but no emulated resident driver or executable ROM service. */
   if((tsr_boot_active || tsr_status==2u) &&

@@ -75,6 +75,7 @@ const result={driver:'AUTHENTIC_ZMUSIC208.X',guestCpu:'REAL_MUSASHI',
   completed, status,pc:'0x'+(wasm._pwp_mu_pc()>>>0).toString(16),
   fault:'0x'+(wasm._pwp_mu_fault_address()>>>0).toString(16),
   calls, last, services,
+  totalGuestCycles:wasm._pwp_mu_guest_cycles(),
   note:'Not a Z-MUSIC playback pass unless real _KEEPPR and guest trap-vector signature are confirmed'};
 console.log('ZMUSIC REAL BOOT EVIDENCE '+JSON.stringify(result));
-if(!services.some(s=>s.op==='0x4e4f' && s.fn==='0xf') || calls<19)process.exitCode=2; // must complete first real _DEFCHR and advance to next guest service
+if(!completed && (status===4 || calls<42))process.exitCode=2; // actual driver must advance beyond its last observed output; a premature exit is failure

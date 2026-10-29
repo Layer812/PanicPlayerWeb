@@ -175,3 +175,14 @@ isolated 68000 adapter now validates the actual `D1=$00087670..7675`,
 `A1` 32-byte bitmap and writes the guest's pixels into a bounded
 gaiji bank; it does not fake the result of `_KEEPPR`. CI must
 advance to a subsequent genuine DOS/IOCS boundary before PASS.
+
+## R24 MFP H-SYNC timing during resident bootstrap
+
+Original Z-MUSIC calls `init_midibd` and a handful of other routines
+using the X68000's H-SYNC and V-DISP wait loops. The production
+minimal MFP bus held GPIP bit7 high; no real 68000 program can pass
+`h_wait` with a fixed H-SYNC level. This experimentally models the
+real 15.75 kHz H-SYNC on GPIP bit7 using elapsed 16 MHz *guest cycles*,
+preserving all other MFP bits, solely while the real driver preboots.
+The regular Pages runtime is unchanged. The authentic driver test also
+records the total elapsed cycles after the final interrupted call.
