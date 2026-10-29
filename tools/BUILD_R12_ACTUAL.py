@@ -132,6 +132,8 @@ def compile_and_test(opts, source, x):
             invoke([node,ROOT/'tools'/'RUN_ZM2_REAL_TSR_CPU.mjs',out])
             if opts.zmusic_driver:
                 invoke([node,ROOT/'tools'/'RUN_ZM2_REAL_DRIVER_PROBE.mjs',out,opts.zmusic_driver])
+                invoke([node,ROOT/'tools'/'RUN_ZM2_BROWSER_BRIDGE.mjs',
+                        out,opts.zmusic_driver,ROOT/'core'/'PANIC.X'])
             print('PASS isolated genuine Musashi TSR boot API; real ZMUSIC residency is NOT yet claimed')
             return  # Never publish experimental WASM to core/ or GitHub Pages.
         invoke([node,ROOT/'tools'/'RUN_R9_PANIC_BOOT.mjs',out,x])

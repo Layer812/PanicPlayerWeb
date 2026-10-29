@@ -8,6 +8,7 @@
  * experimental execution path, not a claim that PAN playback works yet.
  */
 import {verifyPanicX} from './hu-startup-probe.mjs';
+import {fetchVerifiedZmusic208,bootRealZmusic208} from './zmusic-resident.mjs';
 import {makeGuestClockLimiter, EMULATED_68000_HZ} from './guest-clock.mjs';
 import {matchMissingPalette0} from './pan-palette-evidence.mjs';
 import {decodeGuestADPCMChain,decodeNibble6258,directADPCMSampleRate} from './adpcm-msm6258.mjs';
@@ -72,7 +73,7 @@ export async function checkPanicSha256(hu, subtle = globalThis.crypto?.subtle) {
   return true;
 }
 
-export function createMusashiBridge(m, host, hu) {
+export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}={}) {
   if (!(m?.HEAPU8 instanceof Uint8Array)) throw new Error('Actual WASM heap unavailable');
   for (const name of REQUIRED) if (typeof m[name] !== 'function') {
     throw new Error(`Actual Musashi WASM missing ${name}`);
@@ -528,6 +529,13 @@ export function createMusashiBridge(m, host, hu) {
       m.HEAPU8.set(hu, ptr);
       const status = m._pwp_mu_load(hu.byteLength);
       if (status !== 1) throw new Error(`PANIC.X HU load failed, status ${status}`);
+      // The same real Musashi instance runs original ZMUSIC208.X from HU,
+      // reaches actual _KEEPPR, and restores this PANIC.X CPU context.
+      // Experimental-only opt-in: production Pages never bundles a driver.
+      if (experimentalZmusicBytes) {
+        const resident=await bootRealZmusic208(m,experimentalZmusicBytes);
+        host.zmusicResident?.(resident);
+      }
       // Do not start the CPU with an absent / corrupted Human68k command tail.
       // The program needs A2 to discover its single mounted PAN file.
       const a2 = m._pwp_mu_register(10) >>> 0;
@@ -584,7 +592,7 @@ export function createMusashiBridge(m, host, hu) {
   };
 }
 
-export async function createPanicEngine(host) {
+export async function createPanicEngine(host,{experimentalZmusic=false}={}) {
   // Do not report READY unless genuine Musashi and original PANIC.X exist.
   let module;
   try { module = await import('../core/pwp_musashi.mjs'); }
@@ -595,5 +603,9 @@ export async function createPanicEngine(host) {
   if (!res.ok) throw new Error(`オリジナルPANIC.Xがありません (HTTP ${res.status})`);
   const hu = new Uint8Array(await res.arrayBuffer());
   await checkPanicSha256(hu);
-  return createMusashiBridge(m, host, hu);
+  if(!experimentalZmusic)return createMusashiBridge(m,host,hu);
+  if(typeof m._pwp_mu_tsr_begin!=='function')
+    throw new Error('Experimental genuine Z-MUSIC Musashi build is unavailable');
+  const driver=await fetchVerifiedZmusic208();
+  return createMusashiBridge(m,host,hu,{experimentalZmusicBytes:driver});
 }

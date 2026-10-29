@@ -244,3 +244,29 @@ of `MOVEQ #$50,D1; TRAP #3; DOS _EXIT2`, invoking the original driver's
 pointer inside the retained driver memory, then successful guest exit.
 No synthetic TRAP callback, fake identification or host-invented status.
 Only actual driver residency + real API execution can pass the CI gate.
+
+## Web bridge R23: genuine resident before PANIC.X, same Musashi instance
+
+The authentic ZMUSIC208.X (56,310-byte pinned Git blob) now **reaches real
+DOS _KEEPPR** in the isolated Emscripten build. The guest TRAP #3 handler
+returns its status buffer to an independent 68000 caller.
+
+`src/zmusic-resident.mjs` adds explicit, fail-closed browser-side support:
+it independently verifies the fixed upstream Git blob using Git's SHA-1
+object layout (`blob 56310\\0` + actual bytes), executes real HU driver
+startup on the **same Musashi instance after the original PANIC.X has been
+loaded and before its first CPU slice**, detects the real _KEEPPR phase,
+verifies the guest's ZmuSiC signature and preserved PANIC.X program counter.
+
+The experimental adapter path is available through
+`createPanicEngine(host,{experimentalZmusic:true})` when built with
+`PWP_EXPERIMENTAL_ZM2`. Its default is **off**; released GitHub Pages
+still uses the unchanged production WASM and cannot silently enable it.
+The experiment fetches fixed upstream bytes and does not package a driver
+in the repository or Pages bundle.
+
+`tools/RUN_ZM2_BROWSER_BRIDGE.mjs` validates both (a) the authentic driver
+followed by a 68000 TRAP #3 status query and (b) genuine PANIC.X starting
+after ZMUSIC208.X residence. Failures stop the CI run rather than declaring
+success after a partial boot. Full `denkozm.pan` audio playback still needs
+working YM2151 tone generation and timer interrupt scheduling.
