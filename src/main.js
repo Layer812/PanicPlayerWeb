@@ -341,7 +341,7 @@ const result=await loadEngine({
   },
   firstVisibleFrame:({number,pixelMutations})=>{firstVisible=true;retainedFrame=true;display();},
   audioControl:(kind)=>{
-    if(kind===0)audio.halt();
+    if(kind===0)audio.halt('default');
     else if(kind===1)void audio.pause();
     else if(kind===2)void audio.resume();
   },
