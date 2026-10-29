@@ -10,7 +10,15 @@
   Do NOT report runtime ready without these methods.
 */
 const REQUIRED = ['load', 'start', 'stop', 'space', 'dispose'];
-export async function loadEngine(host) {
+// Only a browser explicitly launched on loopback may request the isolated
+// preview core. This never activates the Z-MUSIC download on GitHub Pages.
+export function isLocalZmusicPreview(locationLike) {
+  const host = locationLike?.hostname ?? '';
+  const query = new URLSearchParams(locationLike?.search ?? '');
+  return (host === 'localhost' || host === '127.0.0.1' || host === '[::1]') &&
+    query.get('zmusic') === '1';
+}
+export async function loadEngine(host,{experimentalZmusic=false}={}) {
   let module;
   try {
     // Core is optional. This path must be supplied by the actual WASM port.
@@ -24,7 +32,7 @@ export async function loadEngine(host) {
   }
   try {
     if (typeof module.createPanicEngine !== 'function') throw new Error('createPanicEngine not exported');
-    const engine = await module.createPanicEngine(host);
+    const engine = await module.createPanicEngine(host,{experimentalZmusic});
     if (!engine || REQUIRED.some(method => typeof engine[method] !== 'function')) {
       throw new Error('PANIC engine interface incomplete');
     }
