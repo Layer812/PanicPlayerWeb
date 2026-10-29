@@ -270,3 +270,40 @@ followed by a 68000 TRAP #3 status query and (b) genuine PANIC.X starting
 after ZMUSIC208.X residence. Failures stop the CI run rather than declaring
 success after a partial boot. Full `denkozm.pan` audio playback still needs
 working YM2151 tone generation and timer interrupt scheduling.
+
+## R30 experimental authentic YM2151 synthesis integration (2026-10-29)
+
+R29's true original ZMUSIC208.X resident remains installed in real Musashi
+and executes its genuine TRAP #3 handler. R30 adds **actual YM2151 waveform
+generation** via Aaron Giles' independent **BSD-3-Clause** `ymfm` project.
+This is separate from the native guest-cycle-based Timer A/B and MFP GPIP3
+implementation (which is still owned by the Layer812 guest hardware adapter).
+
+Source provenance:
+- `https://github.com/aaronsgiles/ymfm`
+- fixed git commit `81aec25ccbb98f4873a255f7551ac4dadac59b4a`
+- only `src/ymfm_opm.cpp` and its directly included headers are used;
+  source is fetched *only at build time*, pinned exact HEAD.
+- no `ymfm` source/binary or Z-MUSIC executable is committed or deployed;
+  this is a non-production `PWP_EXPERIMENTAL_ZM2` path.
+- Future publication must include the full BSD-3-Clause original copyright
+  notice, disclaimer, and distribution conditions in accompanying materials,
+  with original software's own licenses kept separate.
+
+Integration behavior:
+- Original guest CPU writes `$E90001/$E90003` into real `ymfm::ym2151`
+  through a C ABI (not a fake FM tone). Guest time advances the oscillator
+  by one 62,500Hz FM sample per 256 actual 16MHz 68000 cycles.
+- The waveform FIFO exposes two original YM2151 DAC channels as 16-bit stereo.
+- The guest-side YM timers/IRQ status and MFP GPIP3 remain cycle-driven.
+- The browser passes FM PCM to a dedicated AudioContext stream and retains
+  ADPCM as a separate stream; ADPCM stop does not kill FM playback.
+- Both original Z-MUSIC startup and original PANIC.X are required by CI.
+- Experimental WASM stays private to the CI's temporary directory; Pages
+  continues to use the unchanged production build.
+
+Acceptance scope is **actual nonzero waveform generation + real TSR and
+PANIC.X startup**, NOT continuous `denkozm.pan` audiovisual playback.
+Further work: run the authentic `denkozm.pan` guest sequence until sustained
+BGM output, verify audiovisual timing, and perform PCM/direct-FM regressions
+before considering any deployment.
