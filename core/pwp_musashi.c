@@ -39,6 +39,9 @@ static uint8_t ram[PWP_RAM_BYTES];
 static uint64_t pwp_guest_cycles, pwp_next_vdisp, pwp_next_scanout;
 static uint32_t pwp_vdisp_ticks, pwp_vdisp_acks, pwp_scanout_ticks;
 static int pwp_vdisp_pending;
+#ifdef PWP_EXPERIMENTAL_ZM2
+static uint32_t pwp_opm_acks;
+#endif
 #ifdef PWP_TAB5_MUSASHI
 int my_irqh_callback(int level) {
   if (level == 6 && pwp_bus_mfp_vdisp_irq_ready()) {
@@ -47,6 +50,14 @@ int my_irqh_callback(int level) {
     pwp_vdisp_acks++;
     return 0x46; /* MC68901 GPIP4, default X68000 vector base $40 */
   }
+#ifdef PWP_EXPERIMENTAL_ZM2
+  if (level == 6 && pwp_bus_mfp_opm_irq_ready()) {
+    pwp_bus_mfp_opm_ack();
+    pwp_vdisp_pending = 0;
+    ++pwp_opm_acks;
+    return 0x43; /* Actual MFP GPIP3 OPM hardware vector. */
+  }
+#endif
   return -1; /* Others retain Musashi's autovector fallback. */
 }
 #endif
@@ -324,6 +335,7 @@ void pwp_mu_reset(void) {
   tsr_saved_ticks=tsr_saved_scans=tsr_saved_acks=0;
   tsr_boot_active=0;
   tsr_opm_isr_address=0;
+  pwp_opm_acks=0;
   memset(tsr_gaiji,0,sizeof(tsr_gaiji));
 #endif
   pwp_guest_cycles=0;
@@ -1247,8 +1259,19 @@ int32_t pwp_mu_run(uint32_t max_instructions) {
 #ifdef PWP_TAB5_MUSASHI
     /* Register writes may have unmasked a prior IPRB pending event;
      * assert IRQ only after the guest has installed its vector. */
-    if (pwp_bus_mfp_vdisp_irq_ready() &&
-        (ram[0x118u] | ram[0x119u] | ram[0x11au] | ram[0x11bu])) {
+    int vdisp_ready = pwp_bus_mfp_vdisp_irq_ready() &&
+        (ram[0x118u] | ram[0x119u] | ram[0x11au] | ram[0x11bu]);
+#ifdef PWP_EXPERIMENTAL_ZM2
+    /* Only the original resident driver's installed VECTOR may receive
+     * an OPM interrupt; never call the handler from host C. */
+    const uint32_t opm_vector=u32(ram+0x10cu);
+    const int opm_ready=(tsr_status==2u || tsr_boot_active) &&
+        opm_vector>=PWP_TSR_LOAD && opm_vector<PWP_TSR_END &&
+        !(opm_vector&1u) && pwp_bus_mfp_opm_irq_ready();
+#else
+    const int opm_ready=0;
+#endif
+    if (vdisp_ready || opm_ready) {
       if (!pwp_vdisp_pending) {
         pwp_vdisp_pending=1;
         m68k_set_irq(6);
@@ -1259,7 +1282,11 @@ int32_t pwp_mu_run(uint32_t max_instructions) {
       pwp_vdisp_pending=0;
       m68k_set_irq(0);
     }
-    const uint32_t acks_before=pwp_vdisp_acks;
+    const uint32_t acks_before=pwp_vdisp_acks
+#ifdef PWP_EXPERIMENTAL_ZM2
+      +pwp_opm_acks
+#endif
+      ;
 #endif
     const uint32_t scanout_before=pwp_scanout_ticks;
     const int used=m68k_execute(1);
@@ -1272,7 +1299,11 @@ int32_t pwp_mu_run(uint32_t max_instructions) {
     if(!pwp_bus_dma3_step(used>0?(uint32_t)used:1u,ram,PWP_RAM_BYTES))
       invalid_bus(pwp_bus_dma3_fault_address());
 #ifdef PWP_TAB5_MUSASHI
-    if (pwp_vdisp_acks!=acks_before) {m68k_set_irq(0);pwp_vdisp_pending=0;}
+    if (pwp_vdisp_acks
+#ifdef PWP_EXPERIMENTAL_ZM2
+        +pwp_opm_acks
+#endif
+        !=acks_before) {m68k_set_irq(0);pwp_vdisp_pending=0;}
 #endif
     /* FIX23: return to browser at start-of-visible scanout, AFTER the guest
      * ISR has had the blanking interval in which to change displayed pages.
