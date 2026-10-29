@@ -693,6 +693,17 @@ int32_t pwp_mu_dispatch(void) {
       m68k_set_reg(M68K_REG_USP,usp);
       complete_dos(0);return state;
     }
+    if(tsr_boot_active && fn==0x0fu) { /* IOCS _DEFCHR: genuine 16x16 gaiji restore. */
+      const uint32_t d1=m68k_get_reg(NULL,M68K_REG_D1);
+      const uint32_t code=d1&0xffffu;
+      const uint32_t bitmap=m68k_get_reg(NULL,M68K_REG_A1);
+      /* Z-MUSIC's do_gj feeds only the 32-byte pixel bitmap, not a
+       * _FNTGET-style width/height header. Maintain a real guest glyph bank. */
+      if((d1>>16)!=8u || code<0x7670u || code>0x7675u ||
+         (bitmap&1u) || !within(bitmap,32u))return state=-18;
+      memcpy(tsr_gaiji[code-0x7670u],ram+bitmap,32u);
+      complete_dos(0);return state;
+    }
     if(tsr_boot_active && fn==0x19u) { /* IOCS _FNTGET, documented D1/A1 ABI. */
       const uint32_t d1=m68k_get_reg(NULL,M68K_REG_D1);
       const uint32_t code=d1&0xffffu;

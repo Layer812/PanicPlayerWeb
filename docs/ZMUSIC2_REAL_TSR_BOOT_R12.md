@@ -164,3 +164,14 @@ The earlier $228 MIDI default alone did not address this first check.
 The experimental guest now initializes `$10C` to the unmapped IPL ROM
 vector `$FF0000`; original guest code will determine whether to invoke
 IOCS `_OPMINTST` and `_B_INTVCS` rather than being forced through.
+
+## R23 actual 16x16 gaiji restoration
+
+Original Z-MUSIC reached IOCS `$0F _DEFCHR` at guest PC `$24CB24`
+after it successfully installed five IOCS/OPM vectors. This call is
+used by the original `do_gj` subroutine to restore six 32-byte glyph
+bitmaps, and can precede either success or an error message. The
+isolated 68000 adapter now validates the actual `D1=$00087670..7675`,
+`A1` 32-byte bitmap and writes the guest's pixels into a bounded
+gaiji bank; it does not fake the result of `_KEEPPR`. CI must
+advance to a subsequent genuine DOS/IOCS boundary before PASS.
