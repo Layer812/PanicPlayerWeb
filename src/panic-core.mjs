@@ -181,6 +181,35 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
       if(directSamples.length>=2048)flushDirectSound();
     }
   };
+  // Experimental-only actual ymfm YM2151 output. Every source sample is
+  // computed from real guest MMIO writes and virtual 68000 clock cycles.
+  // Dedicated AudioContext stream cursor allows FM and ADPCM to overlap.
+  if(experimentalZmusicBytes &&
+      ['_pwp_mu_fm_pending','_pwp_mu_fm_pop','_pwp_mu_fm_rate']
+        .some(name=>typeof m[name]!=='function'))
+    throw new Error('Real YM2151 FM synthesis exports missing from experimental Musashi');
+  let fmSamples=[];
+  const fmRate=typeof m._pwp_mu_fm_rate==='function' ? m._pwp_mu_fm_rate()>>>0 : 0;
+  if(experimentalZmusicBytes && fmRate!==62500)
+    throw new Error('Unexpected YM2151 FM source sample rate: '+fmRate);
+  const flushFMSound=()=>{
+    if(!fmSamples.length)return;
+    // Ignore all-zero startup samples but do not replace them with a
+    // fabricated tone. Real voices enter the queue unchanged.
+    if(fmSamples.some(v=>v!==0))
+      host.audioFrames?.(Float32Array.from(fmSamples),fmRate,2,'FM');
+    fmSamples=[];
+  };
+  const consumeFMSound=()=>{
+    if(!experimentalZmusicBytes)return;
+    for(let i=0;i<8192 && m._pwp_mu_fm_pending()>0;i++){
+      const packed=m._pwp_mu_fm_pop()>>>0;
+      const left=(packed<<16)>>16;
+      const right=packed>>16;
+      fmSamples.push(left/32768,right/32768);
+      if(fmSamples.length>=2048)flushFMSound();
+    }
+  };
   let lastAudioSerial=0;
   const consumeAudioEvent=()=>{
     if(typeof m._pwp_mu_audio_serial!=='function')return;
@@ -386,6 +415,7 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
         const startCpu=clockMs();
         let result = m._pwp_mu_run(512);
         consumeDirectSound();
+        consumeFMSound();
         profileCpuMs+=Math.max(0,clockMs()-startCpu);
         profileSlices++;
         if (guestCycleClock){
@@ -406,7 +436,7 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
           const op = m._pwp_mu_trap() >>> 0;
           const pc = m._pwp_mu_trap_pc() >>> 0;
           result = m._pwp_mu_dispatch();
-          if(result!==2 && result>=1){consumeAudioEvent();consumeDirectSound();}
+          if(result!==2 && result>=1){consumeAudioEvent();consumeDirectSound();consumeFMSound();}
           if (result === 2) {
             const fn=(op===0x4e4f)?` / IOCS D0.B=$${(m._pwp_mu_register(0)&0xff).toString(16).padStart(2,'0')}`:'';
             throw new Error(`Unsupported DOS/IOCS ${hex(op)}${fn} at PC ${hex(pc)}`);
@@ -441,6 +471,7 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
         }
         if (result === 4) {
           flushDirectSound();
+          consumeFMSound();flushFMSound();
           sampleGuest('exit',`Guest process exit ${optional('_pwp_mu_exit_code')}`);
           // Process exits may precede the first modeled VBlank. Preserve the
           // final real guest screen only if there was never a visible frame.
@@ -500,6 +531,7 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
       }
     } catch (e) {
       flushDirectSound();
+      consumeFMSound();flushFMSound();
       sampleGuest('exception',e instanceof Error?e.message:String(e));
       active = false;
       if (!stopped && session === runSession) host.error(e instanceof Error ? e.message : String(e));
@@ -559,6 +591,7 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
       lastDiagnosticSample=0;
       lastAudioSerial=m._pwp_mu_audio_serial?.()>>>0 || 0;
       directDecode={signal:0,index:0};directSamples=[];directRate=0;directBytes=0;
+      fmSamples=[];
       stopped = false;
     },
     async start() {
@@ -576,6 +609,7 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
     },
     async stop() {
       sampleGuest('stop');
+      consumeFMSound();flushFMSound();
       stopped = true; active = false; session++;
       // Terminate the current guest on its next yield; the next `load` resets it.
       // Do not await a pending host file read, which may be slow.
