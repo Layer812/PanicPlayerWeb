@@ -245,6 +245,7 @@ def main():
     a.add_argument('--experimental-zmusic',action='store_true',help='Isolated real TSR boot; not Pages')
     a.add_argument('--zmusic-driver',help='Hash-verified real ZMUSIC208.X for boot observation')
     a.add_argument('--zmusic-pan',help='Original denkozm.pan to require actual guest picture and FM')
+    a.add_argument('--regression-pan',action='append',help='Additional actual sound PAN regression file')
     a.add_argument('--ymfm-root',help='Read-only pinned external BSD ymfm git checkout (experimental)')
     a.add_argument('--panic-source',help='Local src/panic_x_bin.c, read-only')
     a.add_argument('--panic-x',help='Authentic original PANIC.X, read-only')
