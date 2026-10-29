@@ -120,6 +120,9 @@ static int32_t pwp_mu_tsr_keeppr(uint32_t bytes){
   pwp_vdisp_acks=tsr_saved_acks;
   blocked_at=0u;blocked_op=0u;
   m68k_set_context(tsr_saved_context);
+  /* Preboot sound is not part of PANIC.X playback. Keep chip registers,
+   * discard only accumulated preboot waveform samples. */
+  pwp_ym2151_discard();
   tsr_boot_active=0;
   tsr_status=2u;
   return state=1;
