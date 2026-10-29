@@ -63,6 +63,9 @@ uint32_t pwp_bus_adpcm_control_writes(void);
 /* FIX41: read-only evidence of actual guest system/OPM port traffic. */
 uint32_t pwp_bus_sysport_contrast_writes(void);
 uint32_t pwp_bus_opm_latch(void);
+#ifdef PWP_EXPERIMENTAL_ZM2
+uint32_t pwp_bus_opm_register_writes(void);
+#endif
 uint32_t pwp_bus_opm_address_writes(void);
 uint32_t pwp_bus_opm_data_rejections(void);
 int pwp_bus_access8(uint32_t address);
