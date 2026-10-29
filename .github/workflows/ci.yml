@@ -29,9 +29,19 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check pytest
           python -m pytest -q -p no:cacheprovider tests
+      - name: Fetch exact BSD ymfm YM2151 core (experimental only)
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/aaronsgiles/ymfm.git _ymfm
+          git -C _ymfm fetch --depth 1 origin 81aec25ccbb98f4873a255f7551ac4dadac59b4a
+          git -C _ymfm checkout --detach 81aec25ccbb98f4873a255f7551ac4dadac59b4a
+          test "$(git -C _ymfm rev-parse HEAD)" = "81aec25ccbb98f4873a255f7551ac4dadac59b4a"
+      - name: Experimental real YM2151 waveform acceptance (native)
+        run: |
+          c++ -O2 -std=c++14 -I _ymfm/src core/pwp_ym2151_ymfm.cpp _ymfm/src/ymfm_opm.cpp tools/TEST_ZM2_YMFM_AUDIO.cpp -o "$RUNNER_TEMP/pwp_ymfm_audio"
+          "$RUNNER_TEMP/pwp_ymfm_audio"
       - name: Experimental YM2151 timer and MFP IRQ (bus-level acceptance)
         run: |
-          cc -std=c11 -DPWP_EXPERIMENTAL_ZM2=1 core/pwp_x68k_video_bus.c tools/TEST_ZM2_OPM_TIMER.c -o "$RUNNER_TEMP/pwp_opm_timer"
+          cc -std=c11 -DPWP_EXPERIMENTAL_ZM2=1 -DPWP_ZM2_TIMER_TEST=1 core/pwp_x68k_video_bus.c tools/TEST_ZM2_OPM_TIMER.c -o "$RUNNER_TEMP/pwp_opm_timer"
           "$RUNNER_TEMP/pwp_opm_timer"
       - name: Emscripten
         uses: emscripten-core/setup-emsdk@v16
@@ -58,7 +68,7 @@ jobs:
             --output "$RUNNER_TEMP/ZMUSIC208.X"
           test "$(git hash-object "$RUNNER_TEMP/ZMUSIC208.X")" = "4a4d88b3a620694cad3f27739e5b6a4d70cfbbbf"
           python tools/BUILD_R12_ACTUAL.py --x68ktab-root "$GITHUB_WORKSPACE/_x68ktab" \
-            --experimental-zmusic --zmusic-driver "$RUNNER_TEMP/ZMUSIC208.X"
+            --experimental-zmusic --ymfm-root "$GITHUB_WORKSPACE/_ymfm" --zmusic-driver "$RUNNER_TEMP/ZMUSIC208.X"
 
       - name: Upload private-replay-capable WASM (no PAN file or PANIC.X)
         uses: actions/upload-artifact@v4
