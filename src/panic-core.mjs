@@ -188,15 +188,16 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
       ['_pwp_mu_fm_pending','_pwp_mu_fm_pop','_pwp_mu_fm_rate']
         .some(name=>typeof m[name]!=='function'))
     throw new Error('Real YM2151 FM synthesis exports missing from experimental Musashi');
-  let fmSamples=[];
+  let fmSamples=[],fmEverAudible=false;
   const fmRate=typeof m._pwp_mu_fm_rate==='function' ? m._pwp_mu_fm_rate()>>>0 : 0;
   if(experimentalZmusicBytes && fmRate!==62500)
     throw new Error('Unexpected YM2151 FM source sample rate: '+fmRate);
   const flushFMSound=()=>{
     if(!fmSamples.length)return;
-    // Ignore all-zero startup samples but do not replace them with a
-    // fabricated tone. Real voices enter the queue unchanged.
-    if(fmSamples.some(v=>v!==0))
+    // Before first key-on there may be a long true-silence bootstrap.
+    // Once audio begins, retain subsequent silence to preserve durations.
+    if(fmSamples.some(v=>v!==0))fmEverAudible=true;
+    if(fmEverAudible)
       host.audioFrames?.(Float32Array.from(fmSamples),fmRate,2,'FM');
     fmSamples=[];
   };
@@ -591,7 +592,7 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
       lastDiagnosticSample=0;
       lastAudioSerial=m._pwp_mu_audio_serial?.()>>>0 || 0;
       directDecode={signal:0,index:0};directSamples=[];directRate=0;directBytes=0;
-      fmSamples=[];
+      fmSamples=[];fmEverAudible=false;
       stopped = false;
     },
     async start() {
