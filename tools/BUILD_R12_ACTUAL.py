@@ -18,6 +18,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PIN_X = 'f26527c3d19e71b41fb24efbfff03ae862c8e2430c0e3dc84e7ca67047b1f2fd'
+YMFM_PIN = '81aec25ccbb98f4873a255f7551ac4dadac59b4a'
+YMFM_FILES = ('ymfm.h','ymfm_fm.h','ymfm_fm.ipp','ymfm_opm.h','ymfm_opm.cpp')
 TAB5_PARTS = (
     'm68kcpu.c','m68kcpu.h','m68kops.c','m68kops.h','m68k.h','m68kconf.h',
     'm68kfpu.c','m68kmmu.h','softfloat/softfloat.c','softfloat/softfloat.h',
@@ -91,6 +93,21 @@ def compile_and_test(opts, source, x):
     if not emcc: raise RuntimeError('Emscripten emcc unavailable; actual WASM build was NOT attempted')
     if not node: raise RuntimeError('Node.js unavailable; real CPU execution cannot be verified')
     src_manifest=manifest(source)  # missing files STOP before any build publication
+    ymfm_source=None
+    if opts.experimental_zmusic:
+        if not opts.ymfm_root:
+            raise RuntimeError('Experimental real FM requires --ymfm-root at pinned BSD ymfm commit')
+        ymfm_root=Path(opts.ymfm_root).expanduser().resolve(strict=True)
+        revision=subprocess.check_output(['git','-C',str(ymfm_root),'rev-parse','HEAD'],text=True).strip()
+        if revision!=YMFM_PIN:
+            raise RuntimeError('External ymfm revision not pinned; no bundled substitute')
+        ymfm_source=ymfm_root/'src'
+        for name in YMFM_FILES:
+            if not (ymfm_source/name).is_file():
+                raise RuntimeError('Pinned YM2151 core missing: '+name)
+        if not shutil.which(os.environ.get('EMXX','em++')):
+            raise RuntimeError('Emscripten C++ linker missing; cannot link actual ymfm')
+
     if opts.experimental_zmusic and not (ROOT/'core'/'pwp_zm2_preboot.inc').is_file():
         raise RuntimeError('Experimental boot source absent')
     # Actual source files and local source itself are NEVER edited. Two
@@ -121,6 +138,34 @@ def compile_and_test(opts, source, x):
              ROOT/'core'/'pwp_musashi.c',ROOT/'core'/'pwp_x68k_video_bus.c',
              ROOT/'core'/'pwp_x68k_frame.c',*sources,snap/'m68kcpu.c',snap/'m68kops.c',
              snap/'softfloat'/'softfloat.c','-lm','-o',out]
+        if opts.experimental_zmusic:
+            # Compile .c as strict C and .cpp as C++14; do not force the
+            # Human68k/Musashi C adapter through a C++ compiler.
+            emxx=shutil.which(os.environ.get('EMXX','em++'))
+            c_inputs=[ROOT/'core'/'pwp_musashi.c',ROOT/'core'/'pwp_x68k_video_bus.c',
+                      ROOT/'core'/'pwp_x68k_frame.c',*sources,
+                      snap/'m68kcpu.c',snap/'m68kops.c',snap/'softfloat'/'softfloat.c']
+            objects=[]
+            for index,src in enumerate(c_inputs):
+                obj=work/f'c_{index}.o'
+                invoke([emcc,'-O2','-std=gnu11','-I',snap,'-I',snap/'softfloat',
+                        '-DPWP_EXPERIMENTAL_ZM2=1','-DPWP_TAB5_MUSASHI=1',
+                        '-c',src,'-o',obj])
+                objects.append(obj)
+            for index,src in enumerate([ROOT/'core'/'pwp_ym2151_ymfm.cpp',ymfm_source/'ymfm_opm.cpp']):
+                obj=work/f'cxx_{index}.o'
+                invoke([emxx,'-O2','-std=c++14','-I',ROOT/'core','-I',ymfm_source,
+                        '-c',src,'-o',obj])
+                objects.append(obj)
+            fm_exports=['pwp_mu_fm_pending','pwp_mu_fm_pop',
+                        'pwp_mu_fm_rate','pwp_mu_fm_overflows']
+            cmd=[emxx,'-O2',
+                 '-sMODULARIZE=1','-sEXPORT_ES6=1','-sENVIRONMENT=web,worker,node',
+                 '-sALLOW_MEMORY_GROWTH=1','-sINITIAL_MEMORY=33554432',
+                 '-sMAXIMUM_MEMORY=67108864','-sFILESYSTEM=0',
+                 '-sEXPORTED_FUNCTIONS='+str(['_'+n for n in exports+fm_exports]).replace(' ','').replace('"',"'"),
+                 '-sEXPORTED_RUNTIME_METHODS=["HEAPU8"]','--no-entry',*objects,
+                 '-lm','-o',out]
         invoke(cmd)
         wasm=out.with_suffix('.wasm')
         if not out.is_file() or not wasm.is_file() or wasm.read_bytes()[:4]!=b'\0asm':
@@ -193,6 +238,7 @@ def main():
     a.add_argument('--tab5-musashi-source',help='Read-only directory that holds m68kcpu.c/m68kops.c')
     a.add_argument('--experimental-zmusic',action='store_true',help='Isolated real TSR boot; not Pages')
     a.add_argument('--zmusic-driver',help='Hash-verified real ZMUSIC208.X for boot observation')
+    a.add_argument('--ymfm-root',help='Read-only pinned external BSD ymfm git checkout (experimental)')
     a.add_argument('--panic-source',help='Local src/panic_x_bin.c, read-only')
     a.add_argument('--panic-x',help='Authentic original PANIC.X, read-only')
     opts=a.parse_args()
