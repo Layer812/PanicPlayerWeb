@@ -7,7 +7,7 @@ import {parsePanId,resolveGithubPanId} from './pan-url.mjs';
 import {VideoOutput} from './video-output.js';
 import {AudioOutput} from './audio-output.js';
 import {recoverLinkedAudio} from './url-audio-recovery.mjs';
-import {loadEngine} from './engine-loader.js';
+import {loadEngine,isLocalZmusicPreview} from './engine-loader.js';
 import {isGuestSpaceKey,shouldIgnoreGuestSpaceTarget} from './guest-space-key.mjs';
 import {findPan16PaletteCandidates, MAX_PAN_PALETTE_SCAN} from './pan-palette-evidence.mjs';
 import {diagnostics,renderDiagnostics,sampleDiagnostics,fingerprintPan} from './diagnostic-panel.js';
@@ -22,6 +22,7 @@ const el = Object.fromEntries([
 const library = new PanLibrary();
 const video = new VideoOutput(el.screen);
 const audio = new AudioOutput();
+const experimentalZmusic = isLocalZmusicPreview(location);
 let engine = null;
 let playing = false;
 let repeat = false;
@@ -362,10 +363,10 @@ const result=await loadEngine({
     message(`PANICコア停止: ${detail}`,true);
     display();
   }
-});
+},{experimentalZmusic});
 engine=result.engine;
-el['overlay-title'].textContent=engine?'EXPERIMENTAL CPU CORE':'PLAYBACK CORE NOT CONNECTED';
-el['overlay-description'].textContent=engine?'実Musashi / 映像 / ADPCM音声の試験実装。実再生の完全互換性は未検証です。':'ブラウザ側のPANファイラーは動作しますが、PANICの完全な再生コアは未完成です。';
+el['overlay-title'].textContent=engine?(experimentalZmusic?'REAL Z-MUSIC 2.08 / YM2151 (LOCAL PREVIEW)':'EXPERIMENTAL CPU CORE'):'PLAYBACK CORE NOT CONNECTED';
+el['overlay-description'].textContent=engine?(experimentalZmusic?'原版PANIC.X＋実Z-MUSIC常駐＋YM2151 FM/ADPCM。ローカル試聴専用・未公開版です。':'実Musashi / 映像 / ADPCM音声の試験実装。実再生の完全互換性は未検証です。'):'ブラウザ側のPANファイラーは動作しますが、PANICの完全な再生コアは未完成です。';
 message(panLinkStatus ?? (engine?'PANファイルを選択してください。':result.reason),panLinkError || !engine);
 if(!engine){diagnostics.finish('異常停止',result.reason);renderDiagnostics();byId('diagnostics').open=true;}
 display();
