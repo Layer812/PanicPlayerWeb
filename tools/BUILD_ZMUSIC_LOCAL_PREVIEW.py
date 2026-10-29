@@ -106,8 +106,9 @@ def main():
         raise SystemExit('Refusing invalid experimental WASM')
     if b'BSD 3-Clause License' not in license.read_bytes():
         raise SystemExit('Refusing preview without exact original ymfm license')
-    if 'isLocalZmusicPreview(location)' not in (src/'main.js').read_text(encoding='utf-8'):
-        raise SystemExit('Local-only opt-in is missing; no preview')
+    if ('isZmusicEnabled(location)' not in (src/'main.js').read_text(encoding='utf-8') or
+        'isLocalZmusicPreview' not in (src/'engine-loader.js').read_text(encoding='utf-8')):
+        raise SystemExit('Verified local/public Z-MUSIC gating is missing; no preview')
 
     shutil.copytree(src,STAGE/'src',dirs_exist_ok=True,
                     ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
