@@ -3,7 +3,7 @@
 // Third-party components and .PAN media retain separate notices.
 /* Small PCM queue, purposely not an emulated sound chip. The guest core owns timing. */
 export class AudioOutput {
-  constructor() { this.context=null; this.cursor=0; this.streamCursors=new Map(); this.volume=1; this.sources=new Set(); this.sourceStreams=new Map(); }
+  constructor() { this.context=null; this.cursor=0; this.streamCursors=new Map(); this.volume=1; this.sources=new Set(); this.sourceStreams=new Map(); this.guestAudioOrigin=null; }
   async enable() {
     this.context ??= new (window.AudioContext || window.webkitAudioContext)();
     if (this.context.state === 'suspended') await this.context.resume();
@@ -21,7 +21,13 @@ export class AudioOutput {
       return this.context?.state === 'running';
     } finally {clearTimeout(timer);}
   }
-  enqueue(interleaved, sampleRate, channels=2, stream='default') {
+  // Set at actual PAN guest CPU START, never while waiting for .PAN fetch or
+  // 68000 resident boot. Host AudioContext is the shared playback clock.
+  beginGuestTimeline(){
+    this.guestAudioOrigin=this.context?.state==='running'
+      ?this.context.currentTime+.025:null;
+  }
+  enqueue(interleaved, sampleRate, channels=2, stream='default', guestSeconds=null) {
     if (!this.context || this.context.state !== 'running') return false;
     if (!(interleaved instanceof Float32Array) || ![1,2].includes(channels) ||
         !Number.isInteger(sampleRate) || sampleRate < 8000 || sampleRate > 192000 ||
@@ -43,7 +49,14 @@ export class AudioOutput {
     const node = this.context.createBufferSource();
     node.buffer = buffer;
     node.connect(this.context.destination);
-    const start = Math.max(this.context.currentTime + .015, streamCursor);
+    let start = Math.max(this.context.currentTime + .015, streamCursor);
+    if(Number.isFinite(guestSeconds) && guestSeconds>=0 && this.guestAudioOrigin!==null){
+      const target=this.guestAudioOrigin+guestSeconds;
+      // Protect against large scheduling drift if guest execution is slower
+      // than the real device. Never invent skipped guest cycles or samples.
+      start=Math.max(start,target);
+    }
+    if(start > this.context.currentTime + .5)return false;
     node.start(start);
     this.sources.add(node);
     this.sourceStreams.set(node,stream);
@@ -60,7 +73,7 @@ export class AudioOutput {
       try{node.stop();}catch{}
       this.sources.delete(node);this.sourceStreams.delete(node);
     }
-    if(stream===null){this.streamCursors.clear();this.cursor=this.context?.currentTime??0;}
+    if(stream===null){this.streamCursors.clear();this.cursor=this.context?.currentTime??0;this.guestAudioOrigin=null;}
     else if(stream==='default')this.cursor=this.context?.currentTime??0;
     else this.streamCursors.delete(stream);
   }
