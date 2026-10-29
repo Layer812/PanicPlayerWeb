@@ -3,7 +3,7 @@
 // Third-party components and .PAN media retain separate notices.
 /* Small PCM queue, purposely not an emulated sound chip. The guest core owns timing. */
 export class AudioOutput {
-  constructor() { this.context=null; this.cursor=0; this.streamCursors=new Map(); this.volume=1; this.sources=new Set(); }
+  constructor() { this.context=null; this.cursor=0; this.streamCursors=new Map(); this.volume=1; this.sources=new Set(); this.sourceStreams=new Map(); }
   async enable() {
     this.context ??= new (window.AudioContext || window.webkitAudioContext)();
     if (this.context.state === 'suspended') await this.context.resume();
@@ -46,16 +46,23 @@ export class AudioOutput {
     const start = Math.max(this.context.currentTime + .015, streamCursor);
     node.start(start);
     this.sources.add(node);
-    node.onended=()=>this.sources.delete(node);
+    this.sourceStreams.set(node,stream);
+    node.onended=()=>{this.sources.delete(node);this.sourceStreams.delete(node);};
     if(stream==='default')this.cursor=start+n/sampleRate;
     else this.streamCursors.set(stream,start+n/sampleRate);
     return true;
   }
-  halt() {
-    for(const node of this.sources){try{node.stop();}catch{}}
-    this.sources.clear();
-    this.streamCursors.clear();
-    this.cursor=this.context?.currentTime??0;
+  halt(stream=null) {
+    // ADPCM _ADPCMMOD stop must not terminate a simultaneously playing FM
+    // voice. Explicit player STOP still halts all streams (stream=null).
+    for(const node of this.sources){
+      if(stream!==null && this.sourceStreams.get(node)!==stream)continue;
+      try{node.stop();}catch{}
+      this.sources.delete(node);this.sourceStreams.delete(node);
+    }
+    if(stream===null){this.streamCursors.clear();this.cursor=this.context?.currentTime??0;}
+    else if(stream==='default')this.cursor=this.context?.currentTime??0;
+    else this.streamCursors.delete(stream);
   }
   async pause(){if(this.context?.state==='running')await this.context.suspend();}
   async resume(){if(this.context?.state==='suspended')await this.context.resume();}
