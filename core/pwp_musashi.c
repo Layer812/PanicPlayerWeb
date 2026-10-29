@@ -680,6 +680,23 @@ int32_t pwp_mu_dispatch(void) {
   if(blocked_op==0x4e4fu) {
     const uint32_t fn=m68k_get_reg(NULL,M68K_REG_D0)&0xffu;
 #ifdef PWP_EXPERIMENTAL_ZM2
+    if(tsr_boot_active && fn==0x60u) { /* Real IOCS _ADPCMOUT bootstrap sample. */
+      const uint32_t mode=m68k_get_reg(NULL,M68K_REG_D1)&0xffffu;
+      const uint32_t bytes=m68k_get_reg(NULL,M68K_REG_D2);
+      const uint32_t source=m68k_get_reg(NULL,M68K_REG_A1);
+      /* Original ZMUSIC208.X init_all plays dummy_data[32] at 15.6kHz,
+       * stereo. Until a complete DMA/DRQ implementation is present, only
+       * THIS verified 32-byte startup transfer is supported; no arbitrary
+       * guest audio DMA is silently accepted or synthesized. */
+      if(mode!=0x0403u || bytes!=32u || !within(source,bytes))
+        return state=-18;
+      if(!pwp_bus_write8(0x00e92001u,2u))return state=-18;
+      for(uint32_t i=0;i<bytes;i++){
+        if(!pwp_bus_write8(0x00e92003u,ram[source+i]))return state=-18;
+      }
+      if(!pwp_bus_write8(0x00e92001u,1u))return state=-18;
+      complete_dos(0);return state;
+    }
     if(tsr_boot_active && fn==0x8au) { /* Real IOCS _DMAMOVE: safe byte DMA. */
       const uint32_t mode=m68k_get_reg(NULL,M68K_REG_D1)&0xffu;
       const uint32_t n=m68k_get_reg(NULL,M68K_REG_D2);

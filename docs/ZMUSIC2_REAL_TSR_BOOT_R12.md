@@ -218,3 +218,15 @@ $E90003 write, so the *experimental build only* now records each real
 YM2151 register write and busy timing. This is not an audible FM core,
 and no production change or music success is claimed. Real-driver CPU
 errors now fail the CI gate even after sufficient calls were observed.
+
+## R28 genuine ADPCM initialization data path
+
+With experimental YM2151 register writes, the original ZMUSIC208.X
+reached IOCS `$60 _ADPCMOUT` at guest PC `$247A1E`, cycle 3,259,476.
+The original `init_all` issues `D1=$0403`, `D2=32`, `A1=dummy_data`
+and expects a real ADPCM DMA transfer. This experimental preboot
+supports **only that exact verified initialization shape**, feeding the
+guest's original 32 bytes through the existing bounded MSM6258 PLAY,
+DATA and RESET MMIO/FIFO hardware state. Arbitrary _ADPCMOUT requests
+remain unsupported. Real DMA DRQ timing and FM synthesis are still
+separate requirements for playback.
