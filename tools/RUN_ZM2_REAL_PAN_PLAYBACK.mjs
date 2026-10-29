@@ -4,7 +4,7 @@
  * Original Layer812 test glue, MIT. Run inside isolated experimental CI only.
  */
 import {readFileSync} from 'node:fs';
-import {resolve} from 'node:path';
+import {resolve,basename} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createHash,webcrypto} from 'node:crypto';
 import {verifyZmusic208,bootRealZmusic208} from '../src/zmusic-resident.mjs';
@@ -12,7 +12,15 @@ import {verifyZmusic208,bootRealZmusic208} from '../src/zmusic-resident.mjs';
 const [wasmPath,driverPath,panicPath,panPath]=process.argv.slice(2);
 if(!wasmPath||!driverPath||!panicPath||!panPath)
   throw new Error('Usage: RUN_ZM2_REAL_PAN_PLAYBACK.mjs WASM ZMUSIC208.X PANIC.X denkozm.pan');
-const PAN_BLOB='1f453612ad13c3dc635b65f9def4e9315882ace4';
+const PAN_FILES={
+  'denkozm.pan':{length:759100,blob:'1f453612ad13c3dc635b65f9def4e9315882ace4',kind:'FM'},
+  'denkofm.pan':{length:965232,blob:'52aafdfc369501da1afdd632e1255c015ac34e72',kind:'FM'},
+  'denkopcm.pan':{length:675002,blob:'ae552ca372ce127ca4f63d0835bbf22818e7d9fb',kind:'ADPCM'}
+};
+const mediaName=basename(panPath).toLowerCase();
+const expectedMedia=PAN_FILES[mediaName];
+if(!expectedMedia)throw new Error('Unrecognized real regression PAN file');
+
 const PANIC_HASH='f26527c3d19e71b41fb24efbfff03ae862c8e2430c0e3dc84e7ca67047b1f2fd';
 const hex=x=>'0x'+(x>>>0).toString(16).padStart(8,'0');
 const hu=new Uint8Array(readFileSync(resolve(panicPath)));
@@ -22,8 +30,8 @@ const zmusic=new Uint8Array(readFileSync(resolve(driverPath)));
 await verifyZmusic208(zmusic,webcrypto.subtle);
 const pan=new Uint8Array(readFileSync(resolve(panPath)));
 const gitBlob=createHash('sha1').update(Buffer.from('blob '+pan.length+'\0')).update(pan).digest('hex');
-if(pan.length!==759100 || gitBlob!==PAN_BLOB)
-  throw new Error('Original repository denkozm.pan content changed');
+if(pan.length!==expectedMedia.length || gitBlob!==expectedMedia.blob)
+  throw new Error('Original repository '+mediaName+' content changed');
 const factory=(await import(pathToFileURL(resolve(wasmPath)).href)).default;
 const m=await factory();
 const stage=m._pwp_mu_stage_ptr()>>>0;
@@ -33,9 +41,11 @@ const resident=await bootRealZmusic208(m,zmusic,{yieldControl:async()=>{}});
 if(m._pwp_mu_tsr_phase()!==2)throw new Error('Real Z-MUSIC is not resident');
 const size=BigInt(pan.length);
 m._pwp_mu_set_pan_size(Number(size>>32n),Number(size&0xffffffffn));
-const stats={format:'PWP-ZM2-REAL-PAN-v1',driverReal:true,panOriginal:true,
+const stats={format:'PWP-ZM2-REAL-PAN-v2',mediaName,kind:expectedMedia.kind,driverReal:true,panOriginal:true,
  panBytes:pan.length,resident,steps:0,guestCycles:0,ioCalls:0,readCalls:0,
- bytesDelivered:0,traps:0,dosHistogram:{},fmFrames:0,fmNonzero:0,
+ bytesDelivered:0,traps:0,dosHistogram:{},fmFrames:0,fmNonzero:0,adpcmBytesAtStart:m._pwp_mu_sound_bytes()>>>0,
+ adpcmBytes:0,adpcmIOCSEventsAtStart:m._pwp_mu_audio_chain_calls()>>>0,
+ adpcmIOCSEvents:0,
  fmChanges:0,fmOverflow:0,opmWritesAtStart:m._pwp_mu_opm_register_writes?.()??null,
  opmWritesAtEnd:0,opmIrqAcks:0,trap3Calls:0,trap3LastFn:0,
  opmKeyons:0,opmTimerCommands:0,opmRegisters:{},videoWrites:0,pixelWrites:0,
@@ -111,6 +121,8 @@ stats.opmTimerCommands=m._pwp_mu_opm_timer_commands()>>>0;
 for(const i of [0x08,0x10,0x11,0x12,0x14,0x20,0x21,0x22,0x23,0x28,0x30])
  stats.opmRegisters[hex(i)]=m._pwp_mu_opm_register(i)>>>0;
 stats.fmOverflow=m._pwp_mu_fm_overflows()>>>0;
+stats.adpcmBytes=(m._pwp_mu_sound_bytes()>>>0)-stats.adpcmBytesAtStart;
+stats.adpcmIOCSEvents=(m._pwp_mu_audio_chain_calls()>>>0)-stats.adpcmIOCSEventsAtStart;
 stats.lastPC=m._pwp_mu_pc()>>>0;
 stats.lastFault=m._pwp_mu_fault_address()>>>0;
 stats.lastStatus=state;
@@ -122,8 +134,11 @@ if(!stats.readCalls||!stats.bytesDelivered)
   throw new Error('Actual PANIC.X did not read original denkozm.pan');
 if(!stats.firstVisible)
   throw new Error('Actual PANIC.X has not produced a visible denkozm.pan image');
-if(stats.fmNonzero<1024 || stats.fmChanges<64 ||
-   stats.opmWritesAtEnd<=stats.opmWritesAtStart)
-  throw new Error('No sustained real YM2151 FM from actual denkozm.pan yet');
+if(expectedMedia.kind==='FM' && (stats.fmNonzero<1024 || stats.fmChanges<64 ||
+   stats.opmWritesAtEnd<=stats.opmWritesAtStart))
+  throw new Error('No sustained real YM2151 FM from '+mediaName);
+if(expectedMedia.kind==='ADPCM' &&
+   stats.adpcmBytes===0 && stats.adpcmIOCSEvents===0)
+  throw new Error('No original guest ADPCM transfer from '+mediaName);
 if(stats.fmOverflow)throw new Error('Actual FM output samples were lost');
-console.log('PASS original ZMUSIC208.X + PANIC.X + denkozm.pan visible output and REAL YM2151 FM');
+console.log('PASS original ZMUSIC208.X + PANIC.X + '+mediaName+' visible output and '+expectedMedia.kind+' guest audio');
