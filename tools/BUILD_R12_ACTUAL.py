@@ -185,7 +185,19 @@ def compile_and_test(opts, source, x):
                 for pan_file in ([opts.zmusic_pan] if opts.zmusic_pan else [])+(opts.regression_pan or []):
                     invoke([node,ROOT/'tools'/'RUN_ZM2_REAL_PAN_PLAYBACK.mjs',
                             out,opts.zmusic_driver,ROOT/'core'/'PANIC.X',pan_file])
-            print('PASS isolated genuine Musashi TSR boot API; real ZMUSIC residency is NOT yet claimed')
+            # Only explicitly requested *local preview* output is copied after
+            # the real CPU/driver and all PAN regressions pass. Never publish to
+            # core/, dist/ or Pages. There is no .X driver or PAN in the output.
+            if opts.experimental_preview_dir:
+                dest=Path(opts.experimental_preview_dir).resolve()
+                permitted=(ROOT/'_preview_stage'/'core').resolve()
+                if dest!=permitted:
+                    raise RuntimeError('Experimental preview directory must be _preview_stage/core')
+                dest.mkdir(parents=True,exist_ok=True)
+                for f in (out,wasm):
+                    shutil.copyfile(f,dest/f.name)
+                print('PASS isolated local preview WASM staged after full real-PAN regressions')
+            print('PASS isolated real Musashi Z-MUSIC TSR + native FM/ADPCM regression checks')
             return  # Never publish experimental WASM to core/ or GitHub Pages.
         invoke([node,ROOT/'tools'/'RUN_R9_PANIC_BOOT.mjs',out,x])
         invoke([node,ROOT/'tools'/'RUN_R14_WASM_GUEST_IO.mjs',out])
@@ -246,6 +258,7 @@ def main():
     a.add_argument('--zmusic-driver',help='Hash-verified real ZMUSIC208.X for boot observation')
     a.add_argument('--zmusic-pan',help='Original denkozm.pan to require actual guest picture and FM')
     a.add_argument('--regression-pan',action='append',help='Additional actual sound PAN regression file')
+    a.add_argument('--experimental-preview-dir',help='Opt-in isolated _preview_stage/core destination after verified CI')
     a.add_argument('--ymfm-root',help='Read-only pinned external BSD ymfm git checkout (experimental)')
     a.add_argument('--panic-source',help='Local src/panic_x_bin.c, read-only')
     a.add_argument('--panic-x',help='Authentic original PANIC.X, read-only')
