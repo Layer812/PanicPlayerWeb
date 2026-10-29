@@ -16,8 +16,12 @@ YMFM=ROOT/'_ymfm'
 
 RUN_CMD=r"""@echo off
 cd /d "%~dp0"
-py -3 preview_server.py
-if errorlevel 1 python preview_server.py
+where py >nul 2>&1
+if errorlevel 1 (
+  python preview_server.py
+) else (
+  py -3 preview_server.py
+)
 pause
 """
 SERVER=r"""# Bound to loopback only; no external or LAN access.
