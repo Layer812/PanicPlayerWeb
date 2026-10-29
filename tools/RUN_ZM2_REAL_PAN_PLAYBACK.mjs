@@ -68,14 +68,14 @@ for(let slice=0;slice<MAX_SLICES;slice++){
       }
     }
   }
-  if(state===2){
+  while(state===2){
     const op=m._pwp_mu_trap()>>>0;
     stats.traps++;
     const key=hex(op);stats.dosHistogram[key]=(stats.dosHistogram[key]??0)+1;
     if(stats.traps>MAX_TRAPS){stats.stop='trap-budget';break;}
     state=m._pwp_mu_dispatch();
   }
-  if(state===3){
+  while(state===3){
     const length=m._pwp_mu_io_length()>>>0;
     const capacity=m._pwp_mu_io_capacity()>>>0;
     const offset=(BigInt(m._pwp_mu_io_offset_high()>>>0)<<32n) |
@@ -89,6 +89,11 @@ for(let slice=0;slice<MAX_SLICES;slice++){
     m.HEAPU8.set(pan.subarray(Number(offset),Number(offset)+expected),ptr);
     stats.ioCalls++;stats.bytesDelivered+=expected;
     state=m._pwp_mu_supply_read(expected);
+  }
+  // Real MSM6258 ADPCM events are drained without fabricating playback.
+  // This prevents guest DMA buffers from overflowing during long FM tests.
+  if(typeof m._pwp_mu_sound_pop==='function'){
+    for(let i=0;i<8192;i++)if(m._pwp_mu_sound_pop()===-1)break;
   }
   if(state===4){stats.stop='normal-exit';break;}
   if(state!==1){stats.stop='cpu-or-service-failure';break;}
