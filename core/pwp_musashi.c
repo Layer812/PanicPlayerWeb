@@ -690,7 +690,10 @@ int32_t pwp_mu_dispatch(void) {
        * Do not pretend unsupported fixed/descending transfer modes work. */
       if(mode!=5u || !n || n>0xff00u ||
          !within(source,n) || !within(dest,n))return state=-18;
-      memmove(ram+dest,ram+source,n);
+      /* Authentic DMA does A1++ -> A2++ in forward byte order.
+       * Z-MUSIC intentionally overlaps these buffers to fill voice slots.
+       * Standard memmove copies backward and would corrupt that behavior. */
+      for(uint32_t i=0;i<n;i++)ram[dest+i]=ram[source+i];
       complete_dos(0);return state;
     }
     if(tsr_boot_active && fn==0x6au) { /* IOCS _OPMINTST: register REAL guest ISR. */

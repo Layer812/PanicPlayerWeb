@@ -13,6 +13,11 @@ static uint32_t pwp_opm_busy_remaining;
 static uint32_t pwp_opm_status_reads,pwp_opm_ct_writes,pwp_opm_busy_rejects;
 static uint32_t pwp_adpcm_control_writes,pwp_adpcm_data_rejects;
 static uint8_t pwp_opm_ct, pwp_adpcm_playing, pwp_pia_port_c;
+#ifdef PWP_EXPERIMENTAL_ZM2
+/* Experimental, stateful YM2151 register file. NO AUDIO/TIMER OUTPUT. */
+static uint8_t pwp_zm2_opm_registers[256];
+static uint32_t pwp_zm2_opm_register_writes;
+#endif
 /* Audible byte FIFO preserves chronological PANIC.X PCM data and channel/rate
  * for the host decoder; no synthetic ADPCM output or dropped bytes. */
 #define PWP_SOUND_FIFO_SIZE 8192u
@@ -56,6 +61,10 @@ static void pwp_audio_reset(void) {
     pwp_opm_status_reads=pwp_opm_ct_writes=pwp_opm_busy_rejects=0;
     pwp_adpcm_control_writes=pwp_adpcm_data_rejects=0;
     pwp_opm_ct=0;
+#ifdef PWP_EXPERIMENTAL_ZM2
+    memset(pwp_zm2_opm_registers,0,sizeof(pwp_zm2_opm_registers));
+    pwp_zm2_opm_register_writes=0;
+#endif
     pwp_adpcm_playing=0;
     pwp_pia_port_c=0x0bu; /* PX68K PIA_Init() */
     pwp_sound_read_pos=pwp_sound_write_pos=pwp_sound_bytes=pwp_sound_overflows=0;
@@ -92,10 +101,19 @@ static int pwp_audio_write8(uint32_t addr,uint8_t value) {
          * are implemented. Other registers require real FM timers/sound.
          * A write during WRITE BUSY is ignored by actual OPM hardware. */
         if(pwp_opm_busy_remaining) {++pwp_opm_busy_rejects; return 1;}
+#ifndef PWP_EXPERIMENTAL_ZM2
         if(opm_register_latch!=0x1bu) {++opm_data_rejections;return 0;}
-        pwp_opm_ct=(uint8_t)((value>>6u)&3u);
+#else
+        /* Record actual register writes and respect YM2151 BUSY timing.
+         * This state does not produce FM sound or timer interrupts yet. */
+        pwp_zm2_opm_registers[opm_register_latch]=value;
+        ++pwp_zm2_opm_register_writes;
+#endif
+        if(opm_register_latch==0x1bu){
+            pwp_opm_ct=(uint8_t)((value>>6u)&3u);
+            ++pwp_opm_ct_writes;
+        }
         pwp_opm_busy_remaining=PWP_OPM_BUSY_CYCLES;
-        ++pwp_opm_ct_writes;
         return 1;
       case PWP_ADPCM_CTRL:
         /* Real MSM6258 control: RESET bit0 dominates PLAY bit1. */

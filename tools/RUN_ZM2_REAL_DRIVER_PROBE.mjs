@@ -85,4 +85,5 @@ const result={driver:'AUTHENTIC_ZMUSIC208.X',guestCpu:'REAL_MUSASHI',
   stalledOnPpi:false,
   note:'Not a Z-MUSIC playback pass unless real _KEEPPR and guest trap-vector signature are confirmed'};
 console.log('ZMUSIC REAL BOOT EVIDENCE '+JSON.stringify(result));
-if(!completed && (status===4 || calls<44))process.exitCode=2; // must pass first authentic _DMAMOVE; prematurely exiting is not resident
+if(!completed && (status<0 || status===4 || calls<44))process.exitCode=2;
+// CPU faults and unsupported MMIO now fail, regardless of previous call count.

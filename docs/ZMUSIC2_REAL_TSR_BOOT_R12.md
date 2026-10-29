@@ -207,3 +207,14 @@ copies** for mode `$05` (A1++ source, A2++ destination) and up to
 Other DMA modes and MMIO transfers remain unsupported; no fake success.
 The CI proof must pass this first native DMA service and show its real
 D1/D2/A1/A2 registers and next service or full _KEEPPR.
+
+## R27 overlap-correct DMA and experimental YM register write staging
+
+Real ZMUSIC208.X invokes _DMAMOVE mode 5, 10945 bytes, src=$257036,
+dest=$25706D, intentionally copying forward through an overlapping
+voice table. The implementation now uses sequential DMA A1++ -> A2++
+bytes, not memmove's reverse copy. The next guest access was an OPM
+$E90003 write, so the *experimental build only* now records each real
+YM2151 register write and busy timing. This is not an audible FM core,
+and no production change or music success is claimed. Real-driver CPU
+errors now fail the CI gate even after sufficient calls were observed.
