@@ -109,6 +109,9 @@ static void pwp_mfp_opm_line(int asserted);
 uint32_t pwp_bus_opm_latch(void){return opm_register_latch;}
 #ifdef PWP_EXPERIMENTAL_ZM2
 uint32_t pwp_bus_opm_register_writes(void){return pwp_zm2_opm_register_writes;}
+uint32_t pwp_bus_opm_keyons(void){return pwp_zm2_opm_keyons;}
+uint32_t pwp_bus_opm_timer_commands(void){return pwp_zm2_opm_timer_commands;}
+uint32_t pwp_bus_opm_register(uint32_t index){return index<256u?pwp_zm2_opm_registers[index]:0;}
 #endif
 uint32_t pwp_bus_opm_address_writes(void){return opm_address_writes;}
 uint32_t pwp_bus_opm_data_rejections(void){return opm_data_rejections;}
