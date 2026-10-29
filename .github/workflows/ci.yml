@@ -71,8 +71,24 @@ jobs:
             --experimental-zmusic --ymfm-root "$GITHUB_WORKSPACE/_ymfm" --zmusic-driver "$RUNNER_TEMP/ZMUSIC208.X" \
             --zmusic-pan "$GITHUB_WORKSPACE/pan/denkozm.pan" \
             --regression-pan "$GITHUB_WORKSPACE/pan/denkofm.pan" \
-            --regression-pan "$GITHUB_WORKSPACE/pan/denkopcm.pan"
+            --regression-pan "$GITHUB_WORKSPACE/pan/denkopcm.pan" \
+            --experimental-preview-dir "$GITHUB_WORKSPACE/_preview_stage/core"
 
+      - name: Assemble loopback-only Z-MUSIC preview (original driver and PAN excluded)
+        run: |
+          python tools/BUILD_ZMUSIC_LOCAL_PREVIEW.py
+          test -s _preview_stage/core/pwp_musashi.wasm
+          test -s _preview_stage/YMFM_BSD_3_CLAUSE.txt
+          test ! -e _preview_stage/core/ZMUSIC208.X
+          test ! -e _preview_stage/pan
+          python -c "import pathlib; p=pathlib.Path('_preview_stage'); assert not list(p.rglob('*.pan')); assert not list(p.rglob('ZMUSIC*.X'))"
+      - name: Upload Windows local-only audition preview (not GitHub Pages)
+        uses: actions/upload-artifact@v4
+        with:
+          name: PanicPlayerWeb_ZMUSIC_LOCAL_PREVIEW_WIN
+          path: _preview_stage/
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload private-replay-capable WASM (no PAN file or PANIC.X)
         uses: actions/upload-artifact@v4
         with:
