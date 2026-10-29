@@ -188,7 +188,7 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
       ['_pwp_mu_fm_pending','_pwp_mu_fm_pop','_pwp_mu_fm_rate']
         .some(name=>typeof m[name]!=='function'))
     throw new Error('Real YM2151 FM synthesis exports missing from experimental Musashi');
-  let fmSamples=[],fmEverAudible=false;
+  let fmSamples=[],fmEverAudible=false,fmPoppedFrames=0,fmChunkStart=0;
   const fmRate=typeof m._pwp_mu_fm_rate==='function' ? m._pwp_mu_fm_rate()>>>0 : 0;
   if(experimentalZmusicBytes && fmRate!==62500)
     throw new Error('Unexpected YM2151 FM source sample rate: '+fmRate);
@@ -198,7 +198,7 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
     // Once audio begins, retain subsequent silence to preserve durations.
     if(fmSamples.some(v=>v!==0))fmEverAudible=true;
     if(fmEverAudible)
-      host.audioFrames?.(Float32Array.from(fmSamples),fmRate,2,'FM');
+      host.audioFrames?.(Float32Array.from(fmSamples),fmRate,2,'FM',fmChunkStart/fmRate);
     fmSamples=[];
   };
   const consumeFMSound=()=>{
@@ -207,7 +207,9 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
       const packed=m._pwp_mu_fm_pop()>>>0;
       const left=(packed<<16)>>16;
       const right=packed>>16;
+      if(!fmSamples.length)fmChunkStart=fmPoppedFrames;
       fmSamples.push(left/32768,right/32768);
+      ++fmPoppedFrames;
       if(fmSamples.length>=2048)flushFMSound();
     }
   };
@@ -592,7 +594,7 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
       lastDiagnosticSample=0;
       lastAudioSerial=m._pwp_mu_audio_serial?.()>>>0 || 0;
       directDecode={signal:0,index:0};directSamples=[];directRate=0;directBytes=0;
-      fmSamples=[];fmEverAudible=false;
+      fmSamples=[];fmEverAudible=false;fmPoppedFrames=0;fmChunkStart=0;
       stopped = false;
     },
     async start() {
@@ -605,6 +607,7 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
       profileCpuMs=0;profilePaceMs=0;profilePaintMs=0;profileSlices=0;
       skippedScanouts=0;lastPresentedWall=clockMs();
       lastSampledScanout = scanoutTick();
+      host.audioTimelineStart?.();
       sampleGuest('start');
       running = pump(session);
     },
