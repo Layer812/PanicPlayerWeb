@@ -62,7 +62,7 @@ static void pwp_audio_reset(void) {
     pwp_adpcm_control_writes=pwp_adpcm_data_rejects=0;
     pwp_opm_ct=0;
 #ifdef PWP_EXPERIMENTAL_ZM2
-    memset(pwp_zm2_opm_registers,0,sizeof(pwp_zm2_opm_registers));
+    for(uint32_t i=0;i<256u;i++)pwp_zm2_opm_registers[i]=0u;
     pwp_zm2_opm_register_writes=0;
 #endif
     pwp_adpcm_playing=0;
