@@ -1417,4 +1417,6 @@ uint32_t pwp_mu_fm_pending(void){return pwp_ym2151_pending();}
 uint32_t pwp_mu_fm_pop(void){return pwp_ym2151_pop();}
 uint32_t pwp_mu_fm_rate(void){return pwp_ym2151_sample_rate();}
 uint32_t pwp_mu_fm_overflows(void){return pwp_ym2151_overflows();}
+uint32_t pwp_mu_opm_register_writes(void){return pwp_bus_opm_register_writes();}
+uint32_t pwp_mu_opm_acks(void){return pwp_opm_acks;}
 #endif
