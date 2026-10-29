@@ -158,7 +158,8 @@ def compile_and_test(opts, source, x):
                         '-c',src,'-o',obj])
                 objects.append(obj)
             fm_exports=['pwp_mu_fm_pending','pwp_mu_fm_pop',
-                        'pwp_mu_fm_rate','pwp_mu_fm_overflows']
+                        'pwp_mu_fm_rate','pwp_mu_fm_overflows',
+                        'pwp_mu_opm_register_writes','pwp_mu_opm_acks']
             cmd=[emxx,'-O2',
                  '-sMODULARIZE=1','-sEXPORT_ES6=1','-sENVIRONMENT=web,worker,node',
                  '-sALLOW_MEMORY_GROWTH=1','-sINITIAL_MEMORY=33554432',
@@ -179,6 +180,9 @@ def compile_and_test(opts, source, x):
                 invoke([node,ROOT/'tools'/'RUN_ZM2_REAL_DRIVER_PROBE.mjs',out,opts.zmusic_driver])
                 invoke([node,ROOT/'tools'/'RUN_ZM2_BROWSER_BRIDGE.mjs',
                         out,opts.zmusic_driver,ROOT/'core'/'PANIC.X'])
+                if opts.zmusic_pan:
+                    invoke([node,ROOT/'tools'/'RUN_ZM2_REAL_PAN_PLAYBACK.mjs',
+                            out,opts.zmusic_driver,ROOT/'core'/'PANIC.X',opts.zmusic_pan])
             print('PASS isolated genuine Musashi TSR boot API; real ZMUSIC residency is NOT yet claimed')
             return  # Never publish experimental WASM to core/ or GitHub Pages.
         invoke([node,ROOT/'tools'/'RUN_R9_PANIC_BOOT.mjs',out,x])
@@ -238,6 +242,7 @@ def main():
     a.add_argument('--tab5-musashi-source',help='Read-only directory that holds m68kcpu.c/m68kops.c')
     a.add_argument('--experimental-zmusic',action='store_true',help='Isolated real TSR boot; not Pages')
     a.add_argument('--zmusic-driver',help='Hash-verified real ZMUSIC208.X for boot observation')
+    a.add_argument('--zmusic-pan',help='Original denkozm.pan to require actual guest picture and FM')
     a.add_argument('--ymfm-root',help='Read-only pinned external BSD ymfm git checkout (experimental)')
     a.add_argument('--panic-source',help='Local src/panic_x_bin.c, read-only')
     a.add_argument('--panic-x',help='Authentic original PANIC.X, read-only')
