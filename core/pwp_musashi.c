@@ -232,7 +232,7 @@ static int address8(uint32_t a, int for_write) {
 #ifdef PWP_EXPERIMENTAL_ZM2
   if(!for_write && (tsr_boot_active || tsr_status==2u) &&
      a>=0x00fefff0u && a<0x00ff0020u)return 1;
-  if(tsr_boot_active && !for_write &&
+  if((tsr_boot_active || tsr_status==2u) && !for_write &&
      (a==0x00e9a001u || a==0x00e9a003u))return 1;
 #endif
   return within(a,1)||(for_write?pwp_bus_writable8(a):pwp_bus_access8(a));
@@ -243,10 +243,11 @@ static int busread(uint32_t a,uint8_t *value) {
 #ifdef PWP_EXPERIMENTAL_ZM2
   /* 8255 ports A/B sample joystick #1/#2; all inputs high when idle.
    * Only readable input ports, no fictional devices or joystick keypresses. */
-  if(tsr_boot_active && (a==0x00e9a001u || a==0x00e9a003u)) {
+  if((tsr_boot_active || tsr_status==2u) &&
+     (a==0x00e9a001u || a==0x00e9a003u)) {
     *value=0xffu;return 1;
   }
-  if(tsr_boot_active && a==0x00e88001u) {
+  if((tsr_boot_active || tsr_status==2u) && a==0x00e88001u) {
     /* X68000 MFP GPIP bit7 is H-SYNC, not a permanently high level.
      * 15.75 kHz at a virtual 16 MHz CPU => 1016 guest cycles per line.
      * Preserve every other MFP bit from the real emulated register. */
