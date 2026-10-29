@@ -69,4 +69,16 @@ PANICとX68000の文化を支え、貴重なデータを保存されてきた皆
 ブラウザの音声自動再生ポリシーによって、映像は始まっても音が制限される場合があります。
 その場合は**再生画面を1回クリック**すると音声が有効になり、**PANの冒頭から音声付きで再起動**します。途中まで進んだ映像と捨てられた音声を無理に合成しません。音声ONボタンはありません。
 
-Z-MUSIC ver2常駐は未実装です。`denkofm.pan` の直接YM2151アクセスとは別のドライバであり、実Z-MUSICのロード・TRAP #3登録・割込み・FM出力を実装するまでは常駐済み表示やダミーの成功応答を追加しません。
+## Z-MUSIC v2.08 / YM2151 FM（2026-10-29公開）
+
+原版 `PANIC.X` と実Musashi 68000を維持したまま、原版 **Z-MUSIC SYSTEM v2.08** の常駐、`TRAP #3`、実YM2151（OPM）FM音声を統合しました。`denkozm.pan` での映像と音声の同期をWindowsブラウザで確認済みです。X68000全体のエミュレータではなく、PANIC専用Webプレイヤーのままです。
+
+- `denkozm.pan`：原版Z-MUSIC 2.08とYM2151のFM演奏に対応
+- `denkofm.pan`：直接YM2151 FM音源再生に対応
+- `denkopcm.pan`：ADPCM実データの再生に対応
+
+音声を鳴らすには通常のブラウザ音声許可に従い、**PLAY**を押してください。共有URLからの自動再生では、ブラウザの自動再生制限により最初にクリックが必要な場合があります。
+
+FMの音声合成には[Aaron Giles氏のymfm](https://github.com/aaronsgiles/ymfm)（BSD-3-Clause）を使用しています。実際のYM2151波形を合成しており、音楽を録音した音声ファイルを埋め込む方式ではありません。原版Z-MUSIC v2.08の著作権者は**西川善司氏**です。本サイトはZ-MUSIC実行形式を配布物に同梱せず、固定された公開元から取得・照合して動作させます。通信に失敗した場合、Z-MUSICを使うPANの再生はできません。
+
+著作権と配布条件は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)、[ymfmライセンス（公開サイト）](https://layer812.github.io/PanicPlayerWeb/legal/ymfm_LICENSE.txt) を参照してください。個別PANの権利は各作者に帰属します。
