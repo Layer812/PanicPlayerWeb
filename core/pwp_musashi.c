@@ -10,6 +10,7 @@
 #include "pwp_x68k_video_bus.h"
 #ifdef PWP_EXPERIMENTAL_ZM2
 #include "pwp_hu_resident.h"
+#include "pwp_ym2151_bridge.h"
 #endif
 
 #define PWP_RAM_BYTES (4u * 1024u * 1024u)
@@ -1409,3 +1410,11 @@ uint32_t pwp_mu_video_graphic_word(uint32_t x,uint32_t y){return pwp_bus_graphic
 uint32_t pwp_mu_mfp_ierb_reads(void){return pwp_bus_mfp_ierb_reads();}
 uint32_t pwp_mu_mfp_imrb_reads(void){return pwp_bus_mfp_imrb_reads();}
 uint32_t pwp_mu_mfp_last_read_address(void){return pwp_bus_mfp_last_read_address();}
+
+#ifdef PWP_EXPERIMENTAL_ZM2
+/* Read-only actual YM2151 waveform FIFO, produced only from guest MMIO. */
+uint32_t pwp_mu_fm_pending(void){return pwp_ym2151_pending();}
+uint32_t pwp_mu_fm_pop(void){return pwp_ym2151_pop();}
+uint32_t pwp_mu_fm_rate(void){return pwp_ym2151_sample_rate();}
+uint32_t pwp_mu_fm_overflows(void){return pwp_ym2151_overflows();}
+#endif
