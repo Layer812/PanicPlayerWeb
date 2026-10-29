@@ -82,6 +82,22 @@ jobs:
           test ! -e _preview_stage/core/ZMUSIC208.X
           test ! -e _preview_stage/pan
           python -c "import pathlib; p=pathlib.Path('_preview_stage'); assert not list(p.rglob('*.pan')); assert not list(p.rglob('ZMUSIC*.X'))"
+      - name: Validate production Pages site with tested FM core and full legal materials
+        run: |
+          cp _preview_stage/core/pwp_musashi.mjs core/pwp_musashi.mjs
+          cp _preview_stage/core/pwp_musashi.wasm core/pwp_musashi.wasm
+          mkdir -p _panic_docs
+          curl --fail --location --retry 3 --silent --show-error             https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/fbecf38c884d66d9d93f08f58210400cb4a34b86/docs/panic.doc             --output _panic_docs/panic.doc
+          curl --fail --location --retry 3 --silent --show-error             https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/fbecf38c884d66d9d93f08f58210400cb4a34b86/docs/panic.his             --output _panic_docs/panic.his
+          python tools/BUILD_PAGES_SITE.py --root . --output _site --original-docs _panic_docs
+          test -s _site/core/pwp_musashi.wasm
+          test -s _site/legal/ymfm_LICENSE.txt
+          test -s _site/legal/Musashi_LICENSE.txt
+          test ! -e _site/core/ZMUSIC208.X
+          test ! -e _site/_preview_stage
+          test ! -e _site/tools
+          python -c "from pathlib import Path; s=(Path('_site/src/main.js')).read_text(); assert 'isZmusicEnabled(location)' in s"
+
       - name: Upload Windows local-only audition preview (not GitHub Pages)
         uses: actions/upload-artifact@v4
         with:
