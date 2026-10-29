@@ -349,8 +349,9 @@ const result=await loadEngine({
   guestAudio:({kind,rate,bytes,chains,samples})=>{
     el['audio-status'].textContent=`ADPCM: ${kind} / ${rate} Hz / ${samples} 標本 / ${chains} 区間`;
   },
-  audioFrames:(samples,rate,channels,device='ADPCM')=>{
-    const ok=audio.enqueue(samples,rate,channels,device==='FM'?'FM':'default');
+  audioTimelineStart:()=>audio.beginGuestTimeline(),
+  audioFrames:(samples,rate,channels,device='ADPCM',guestSeconds=null)=>{
+    const ok=audio.enqueue(samples,rate,channels,device==='FM'?'FM':'default',guestSeconds);
     el['audio-status'].textContent=ok
       ?`音声：${device} ${rate}Hz / ${samples.length/channels}標本をPCM出力に渡しました`
       :`音声：${device}は生成済み。ブラウザ音声が無効、または再生キューが満杯です。`;
