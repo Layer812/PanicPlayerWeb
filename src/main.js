@@ -7,7 +7,7 @@ import {parsePanId,resolveGithubPanId} from './pan-url.mjs';
 import {VideoOutput} from './video-output.js';
 import {AudioOutput} from './audio-output.js';
 import {recoverLinkedAudio} from './url-audio-recovery.mjs';
-import {loadEngine} from './engine-loader.js';
+import {loadEngine,isZmusicEnabled,isPublishedZmusic} from './engine-loader.js';
 import {isGuestSpaceKey,shouldIgnoreGuestSpaceTarget} from './guest-space-key.mjs';
 import {findPan16PaletteCandidates, MAX_PAN_PALETTE_SCAN} from './pan-palette-evidence.mjs';
 import {diagnostics,renderDiagnostics,sampleDiagnostics,fingerprintPan} from './diagnostic-panel.js';
@@ -22,6 +22,8 @@ const el = Object.fromEntries([
 const library = new PanLibrary();
 const video = new VideoOutput(el.screen);
 const audio = new AudioOutput();
+const experimentalZmusic = isZmusicEnabled(location);
+const publicZmusic = isPublishedZmusic(location);
 let engine = null;
 let playing = false;
 let repeat = false;
@@ -341,18 +343,19 @@ const result=await loadEngine({
   },
   firstVisibleFrame:({number,pixelMutations})=>{firstVisible=true;retainedFrame=true;display();},
   audioControl:(kind)=>{
-    if(kind===0)audio.halt();
+    if(kind===0)audio.halt('default');
     else if(kind===1)void audio.pause();
     else if(kind===2)void audio.resume();
   },
   guestAudio:({kind,rate,bytes,chains,samples})=>{
     el['audio-status'].textContent=`ADPCM: ${kind} / ${rate} Hz / ${samples} 標本 / ${chains} 区間`;
   },
-  audioFrames:(samples,rate,channels)=>{
-    const ok=audio.enqueue(samples,rate,channels);
+  audioTimelineStart:()=>audio.beginGuestTimeline(),
+  audioFrames:(samples,rate,channels,device='ADPCM',guestSeconds=null)=>{
+    const ok=audio.enqueue(samples,rate,channels,device==='FM'?'FM':'default',guestSeconds);
     el['audio-status'].textContent=ok
-      ?`音声：ADPCM ${rate}Hz / ${samples.length/channels}標本をPCM出力に渡しました`
-      :'音声：ADPCMは復号済み。ブラウザ音声が無効、または再生キューが満杯です。';
+      ?`音声：${device} ${rate}Hz / ${samples.length/channels}標本をPCM出力に渡しました`
+      :`音声：${device}は生成済み。ブラウザ音声が無効、または再生キューが満杯です。`;
     return ok;
   },
   finished:()=>{void finished();},
@@ -362,10 +365,10 @@ const result=await loadEngine({
     message(`PANICコア停止: ${detail}`,true);
     display();
   }
-});
+},{experimentalZmusic});
 engine=result.engine;
-el['overlay-title'].textContent=engine?'EXPERIMENTAL CPU CORE':'PLAYBACK CORE NOT CONNECTED';
-el['overlay-description'].textContent=engine?'実Musashi / 映像 / ADPCM音声の試験実装。実再生の完全互換性は未検証です。':'ブラウザ側のPANファイラーは動作しますが、PANICの完全な再生コアは未完成です。';
+el['overlay-title'].textContent=engine?(publicZmusic?'PANIC.X / Z-MUSIC 2.08 / YM2151':experimentalZmusic?'REAL Z-MUSIC 2.08 / YM2151 (LOCAL PREVIEW)':'EXPERIMENTAL CPU CORE'):'PLAYBACK CORE NOT CONNECTED';
+el['overlay-description'].textContent=engine?(publicZmusic?'オリジナルPANIC.X、実Musashi 68000、Z-MUSIC 2.08、YM2151 FMとADPCMに対応します。':experimentalZmusic?'原版PANIC.X＋実Z-MUSIC常駐＋YM2151 FM/ADPCM。ローカル試聴専用です。':'実Musashi / 映像 / ADPCM音声の試験実装。実再生の完全互換性は未検証です。'):'ブラウザ側のPANファイラーは動作しますが、PANICの完全な再生コアは未完成です。';
 message(panLinkStatus ?? (engine?'PANファイルを選択してください。':result.reason),panLinkError || !engine);
 if(!engine){diagnostics.finish('異常停止',result.reason);renderDiagnostics();byId('diagnostics').open=true;}
 display();

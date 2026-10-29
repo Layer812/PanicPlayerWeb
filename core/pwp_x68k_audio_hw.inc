@@ -13,6 +13,14 @@ static uint32_t pwp_opm_busy_remaining;
 static uint32_t pwp_opm_status_reads,pwp_opm_ct_writes,pwp_opm_busy_rejects;
 static uint32_t pwp_adpcm_control_writes,pwp_adpcm_data_rejects;
 static uint8_t pwp_opm_ct, pwp_adpcm_playing, pwp_pia_port_c;
+#ifdef PWP_EXPERIMENTAL_ZM2
+/* Actual guest register state and cycle-based OPM timers. Waveforms are
+ * synthesized through a separate, pinned BSD ymfm component. */
+static uint8_t pwp_zm2_opm_registers[256];
+static uint32_t pwp_zm2_opm_register_writes;
+static uint32_t pwp_zm2_opm_keyons,pwp_zm2_opm_timer_commands;
+#include "pwp_ym2151_timer.inc"
+#endif
 /* Audible byte FIFO preserves chronological PANIC.X PCM data and channel/rate
  * for the host decoder; no synthetic ADPCM output or dropped bytes. */
 #define PWP_SOUND_FIFO_SIZE 8192u
@@ -50,12 +58,27 @@ uint32_t pwp_bus_sound_overflows(void){return pwp_sound_overflows;}
 void pwp_bus_audio_advance_cycles(uint32_t cycles) {
     if(cycles >= pwp_opm_busy_remaining) pwp_opm_busy_remaining=0;
     else pwp_opm_busy_remaining-=cycles;
+#ifdef PWP_EXPERIMENTAL_ZM2
+    pwp_zm2_timer_advance(cycles);
+#ifndef PWP_ZM2_TIMER_TEST
+    pwp_ym2151_advance(cycles);
+#endif
+#endif
 }
 static void pwp_audio_reset(void) {
     pwp_opm_busy_remaining=0;
     pwp_opm_status_reads=pwp_opm_ct_writes=pwp_opm_busy_rejects=0;
     pwp_adpcm_control_writes=pwp_adpcm_data_rejects=0;
     pwp_opm_ct=0;
+#ifdef PWP_EXPERIMENTAL_ZM2
+    for(uint32_t i=0;i<256u;i++)pwp_zm2_opm_registers[i]=0u;
+    pwp_zm2_opm_register_writes=0;
+    pwp_zm2_opm_keyons=pwp_zm2_opm_timer_commands=0;
+    pwp_zm2_timer_reset();
+#ifndef PWP_ZM2_TIMER_TEST
+    pwp_ym2151_reset();
+#endif
+#endif
     pwp_adpcm_playing=0;
     pwp_pia_port_c=0x0bu; /* PX68K PIA_Init() */
     pwp_sound_read_pos=pwp_sound_write_pos=pwp_sound_bytes=pwp_sound_overflows=0;
@@ -68,7 +91,11 @@ static int pwp_audio_read8(uint32_t addr,uint8_t *value) {
     switch(addr) {
       case OPM_DATA_PORT:
         ++pwp_opm_status_reads;
-        *value=(uint8_t)(pwp_opm_busy_remaining ? 0x80u : 0u);
+        *value=(uint8_t)(pwp_opm_busy_remaining ? 0x80u : 0u)
+#ifdef PWP_EXPERIMENTAL_ZM2
+            |pwp_zm2_timer_flags
+#endif
+            ;
         return 1;
       case PWP_ADPCM_CTRL:
         *value=(uint8_t)(pwp_adpcm_playing ? 0xc0u : 0x40u);
@@ -92,10 +119,25 @@ static int pwp_audio_write8(uint32_t addr,uint8_t value) {
          * are implemented. Other registers require real FM timers/sound.
          * A write during WRITE BUSY is ignored by actual OPM hardware. */
         if(pwp_opm_busy_remaining) {++pwp_opm_busy_rejects; return 1;}
+#ifndef PWP_EXPERIMENTAL_ZM2
         if(opm_register_latch!=0x1bu) {++opm_data_rejections;return 0;}
-        pwp_opm_ct=(uint8_t)((value>>6u)&3u);
+#else
+        /* Actual YM2151 register write drives both FM synthesis and the
+         * guest-cycle-based timer/OPM IRQ model, without host-side music. */
+        pwp_zm2_opm_registers[opm_register_latch]=value;
+        ++pwp_zm2_opm_register_writes;
+        if(opm_register_latch==0x08u && (value&0x78u))++pwp_zm2_opm_keyons;
+        if(opm_register_latch==0x14u)++pwp_zm2_opm_timer_commands;
+        pwp_zm2_timer_write(opm_register_latch,value);
+#ifndef PWP_ZM2_TIMER_TEST
+        pwp_ym2151_write(opm_register_latch,value);
+#endif
+#endif
+        if(opm_register_latch==0x1bu){
+            pwp_opm_ct=(uint8_t)((value>>6u)&3u);
+            ++pwp_opm_ct_writes;
+        }
         pwp_opm_busy_remaining=PWP_OPM_BUSY_CYCLES;
-        ++pwp_opm_ct_writes;
         return 1;
       case PWP_ADPCM_CTRL:
         /* Real MSM6258 control: RESET bit0 dominates PLAY bit1. */

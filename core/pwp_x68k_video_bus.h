@@ -63,6 +63,12 @@ uint32_t pwp_bus_adpcm_control_writes(void);
 /* FIX41: read-only evidence of actual guest system/OPM port traffic. */
 uint32_t pwp_bus_sysport_contrast_writes(void);
 uint32_t pwp_bus_opm_latch(void);
+#ifdef PWP_EXPERIMENTAL_ZM2
+uint32_t pwp_bus_opm_register_writes(void);
+uint32_t pwp_bus_opm_keyons(void);
+uint32_t pwp_bus_opm_timer_commands(void);
+uint32_t pwp_bus_opm_register(uint32_t index);
+#endif
 uint32_t pwp_bus_opm_address_writes(void);
 uint32_t pwp_bus_opm_data_rejections(void);
 int pwp_bus_access8(uint32_t address);
@@ -93,6 +99,11 @@ uint32_t pwp_bus_mfp_vdisp_enabled(void);
 void pwp_bus_mfp_vdisp_pulse(void);
 uint32_t pwp_bus_mfp_vdisp_irq_ready(void);
 void pwp_bus_mfp_vdisp_ack(void);
+#ifdef PWP_EXPERIMENTAL_ZM2
+/* Real YM2151 status IRQ falling edge on MC68901 GPIP3 / vector $43. */
+uint32_t pwp_bus_mfp_opm_irq_ready(void);
+void pwp_bus_mfp_opm_ack(void);
+#endif
 uint32_t pwp_bus_mfp_vdisp_latched(void);
 /* GPIP4 is an external CRTC V-DISP input, not a software movie flag.
  * Read $E88001: bit 4 high in display, low in vertical blank.

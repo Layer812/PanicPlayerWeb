@@ -29,6 +29,20 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check pytest
           python -m pytest -q -p no:cacheprovider tests
+      - name: Fetch exact BSD ymfm YM2151 core (experimental only)
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/aaronsgiles/ymfm.git _ymfm
+          git -C _ymfm fetch --depth 1 origin 81aec25ccbb98f4873a255f7551ac4dadac59b4a
+          git -C _ymfm checkout --detach 81aec25ccbb98f4873a255f7551ac4dadac59b4a
+          test "$(git -C _ymfm rev-parse HEAD)" = "81aec25ccbb98f4873a255f7551ac4dadac59b4a"
+      - name: Experimental real YM2151 waveform acceptance (native)
+        run: |
+          c++ -O2 -std=c++14 -I _ymfm/src core/pwp_ym2151_ymfm.cpp _ymfm/src/ymfm_opm.cpp tools/TEST_ZM2_YMFM_AUDIO.cpp -o "$RUNNER_TEMP/pwp_ymfm_audio"
+          "$RUNNER_TEMP/pwp_ymfm_audio"
+      - name: Experimental YM2151 timer and MFP IRQ (bus-level acceptance)
+        run: |
+          cc -std=c11 -DPWP_EXPERIMENTAL_ZM2=1 -DPWP_ZM2_TIMER_TEST=1 core/pwp_x68k_video_bus.c tools/TEST_ZM2_OPM_TIMER.c -o "$RUNNER_TEMP/pwp_opm_timer"
+          "$RUNNER_TEMP/pwp_opm_timer"
       - name: Emscripten
         uses: emscripten-core/setup-emsdk@v16
         with:
@@ -47,6 +61,50 @@ jobs:
           python tools/BUILD_R12_ACTUAL.py --x68ktab-root "$GITHUB_WORKSPACE/_x68ktab"
           test -s core/pwp_musashi.wasm
           test -s core/PANIC.X
+      - name: Real Musashi resident boot, verified ZMUSIC208.X (isolated; not deployed)
+        run: |
+          curl --fail --location --silent --show-error --retry 3 \
+            https://raw.githubusercontent.com/toyoshim/z-music.js/fd6ad1c1db9edcf973283597e2c95cedf17eb701/x/ZMUSIC208.X \
+            --output "$RUNNER_TEMP/ZMUSIC208.X"
+          test "$(git hash-object "$RUNNER_TEMP/ZMUSIC208.X")" = "4a4d88b3a620694cad3f27739e5b6a4d70cfbbbf"
+          python tools/BUILD_R12_ACTUAL.py --x68ktab-root "$GITHUB_WORKSPACE/_x68ktab" \
+            --experimental-zmusic --ymfm-root "$GITHUB_WORKSPACE/_ymfm" --zmusic-driver "$RUNNER_TEMP/ZMUSIC208.X" \
+            --zmusic-pan "$GITHUB_WORKSPACE/pan/denkozm.pan" \
+            --regression-pan "$GITHUB_WORKSPACE/pan/denkofm.pan" \
+            --regression-pan "$GITHUB_WORKSPACE/pan/denkopcm.pan" \
+            --experimental-preview-dir "$GITHUB_WORKSPACE/_preview_stage/core"
+
+      - name: Assemble loopback-only Z-MUSIC preview (original driver and PAN excluded)
+        run: |
+          python tools/BUILD_ZMUSIC_LOCAL_PREVIEW.py
+          test -s _preview_stage/core/pwp_musashi.wasm
+          test -s _preview_stage/YMFM_BSD_3_CLAUSE.txt
+          test ! -e _preview_stage/core/ZMUSIC208.X
+          test ! -e _preview_stage/pan
+          python -c "import pathlib; p=pathlib.Path('_preview_stage'); assert not list(p.rglob('*.pan')); assert not list(p.rglob('ZMUSIC*.X'))"
+      - name: Validate production Pages site with tested FM core and full legal materials
+        run: |
+          cp _preview_stage/core/pwp_musashi.mjs core/pwp_musashi.mjs
+          cp _preview_stage/core/pwp_musashi.wasm core/pwp_musashi.wasm
+          mkdir -p _panic_docs
+          curl --fail --location --retry 3 --silent --show-error             https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/fbecf38c884d66d9d93f08f58210400cb4a34b86/docs/panic.doc             --output _panic_docs/panic.doc
+          curl --fail --location --retry 3 --silent --show-error             https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/fbecf38c884d66d9d93f08f58210400cb4a34b86/docs/panic.his             --output _panic_docs/panic.his
+          python tools/BUILD_PAGES_SITE.py --root . --output _site --original-docs _panic_docs
+          test -s _site/core/pwp_musashi.wasm
+          test -s _site/legal/ymfm_LICENSE.txt
+          test -s _site/legal/Musashi_LICENSE.txt
+          test ! -e _site/core/ZMUSIC208.X
+          test ! -e _site/_preview_stage
+          test ! -e _site/tools
+          python -c "from pathlib import Path; s=(Path('_site/src/main.js')).read_text(); assert 'isZmusicEnabled(location)' in s"
+
+      - name: Upload Windows local-only audition preview (not GitHub Pages)
+        uses: actions/upload-artifact@v4
+        with:
+          name: PanicPlayerWeb_ZMUSIC_LOCAL_PREVIEW_WIN
+          path: _preview_stage/
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload private-replay-capable WASM (no PAN file or PANIC.X)
         uses: actions/upload-artifact@v4
         with:

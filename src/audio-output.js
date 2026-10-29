@@ -3,7 +3,7 @@
 // Third-party components and .PAN media retain separate notices.
 /* Small PCM queue, purposely not an emulated sound chip. The guest core owns timing. */
 export class AudioOutput {
-  constructor() { this.context=null; this.cursor=0; this.volume=1; this.sources=new Set(); }
+  constructor() { this.context=null; this.cursor=0; this.streamCursors=new Map(); this.volume=1; this.sources=new Set(); this.sourceStreams=new Map(); this.guestAudioOrigin=null; }
   async enable() {
     this.context ??= new (window.AudioContext || window.webkitAudioContext)();
     if (this.context.state === 'suspended') await this.context.resume();
@@ -21,7 +21,13 @@ export class AudioOutput {
       return this.context?.state === 'running';
     } finally {clearTimeout(timer);}
   }
-  enqueue(interleaved, sampleRate, channels=2) {
+  // Set at actual PAN guest CPU START, never while waiting for .PAN fetch or
+  // 68000 resident boot. Host AudioContext is the shared playback clock.
+  beginGuestTimeline(){
+    this.guestAudioOrigin=this.context?.state==='running'
+      ?this.context.currentTime+.025:null;
+  }
+  enqueue(interleaved, sampleRate, channels=2, stream='default', guestSeconds=null) {
     if (!this.context || this.context.state !== 'running') return false;
     if (!(interleaved instanceof Float32Array) || ![1,2].includes(channels) ||
         !Number.isInteger(sampleRate) || sampleRate < 8000 || sampleRate > 192000 ||
@@ -29,7 +35,12 @@ export class AudioOutput {
     const n = interleaved.length / channels;
     if (n === 0) return true;
     // Avoid runaway latency if browser tab is suspended or producer runs faster.
-    if (this.cursor > this.context.currentTime + .5) return false;
+    // Different guest sound devices share the AudioContext mixer but keep
+    // independent schedules. Serializing FM after an ADPCM buffer produces
+    // artificial silence and breaks their simultaneous playback.
+    const streamCursor=stream==='default'?this.cursor:
+      (this.streamCursors.get(stream)??this.context.currentTime);
+    if (streamCursor > this.context.currentTime + .5) return false;
     const buffer = this.context.createBuffer(channels, n, sampleRate);
     for (let channel=0; channel<channels; channel++) {
       const dest = buffer.getChannelData(channel);
@@ -38,17 +49,33 @@ export class AudioOutput {
     const node = this.context.createBufferSource();
     node.buffer = buffer;
     node.connect(this.context.destination);
-    const start = Math.max(this.context.currentTime + .015, this.cursor);
+    let start = Math.max(this.context.currentTime + .015, streamCursor);
+    if(Number.isFinite(guestSeconds) && guestSeconds>=0 && this.guestAudioOrigin!==null){
+      const target=this.guestAudioOrigin+guestSeconds;
+      // Protect against large scheduling drift if guest execution is slower
+      // than the real device. Never invent skipped guest cycles or samples.
+      start=Math.max(start,target);
+    }
+    if(start > this.context.currentTime + .5)return false;
     node.start(start);
     this.sources.add(node);
-    node.onended=()=>this.sources.delete(node);
-    this.cursor = start + n/sampleRate;
+    this.sourceStreams.set(node,stream);
+    node.onended=()=>{this.sources.delete(node);this.sourceStreams.delete(node);};
+    if(stream==='default')this.cursor=start+n/sampleRate;
+    else this.streamCursors.set(stream,start+n/sampleRate);
     return true;
   }
-  halt() {
-    for(const node of this.sources){try{node.stop();}catch{}}
-    this.sources.clear();
-    this.cursor=this.context?.currentTime??0;
+  halt(stream=null) {
+    // ADPCM _ADPCMMOD stop must not terminate a simultaneously playing FM
+    // voice. Explicit player STOP still halts all streams (stream=null).
+    for(const node of this.sources){
+      if(stream!==null && this.sourceStreams.get(node)!==stream)continue;
+      try{node.stop();}catch{}
+      this.sources.delete(node);this.sourceStreams.delete(node);
+    }
+    if(stream===null){this.streamCursors.clear();this.cursor=this.context?.currentTime??0;this.guestAudioOrigin=null;}
+    else if(stream==='default')this.cursor=this.context?.currentTime??0;
+    else this.streamCursors.delete(stream);
   }
   async pause(){if(this.context?.state==='running')await this.context.suspend();}
   async resume(){if(this.context?.state==='suspended')await this.context.resume();}

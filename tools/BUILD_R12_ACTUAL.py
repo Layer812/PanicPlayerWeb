@@ -18,6 +18,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PIN_X = 'f26527c3d19e71b41fb24efbfff03ae862c8e2430c0e3dc84e7ca67047b1f2fd'
+YMFM_PIN = '81aec25ccbb98f4873a255f7551ac4dadac59b4a'
+YMFM_FILES = ('ymfm.h','ymfm_fm.h','ymfm_fm.ipp','ymfm_opm.h','ymfm_opm.cpp')
 TAB5_PARTS = (
     'm68kcpu.c','m68kcpu.h','m68kops.c','m68kops.h','m68k.h','m68kconf.h',
     'm68kfpu.c','m68kmmu.h','softfloat/softfloat.c','softfloat/softfloat.h',
@@ -91,6 +93,23 @@ def compile_and_test(opts, source, x):
     if not emcc: raise RuntimeError('Emscripten emcc unavailable; actual WASM build was NOT attempted')
     if not node: raise RuntimeError('Node.js unavailable; real CPU execution cannot be verified')
     src_manifest=manifest(source)  # missing files STOP before any build publication
+    ymfm_source=None
+    if opts.experimental_zmusic:
+        if not opts.ymfm_root:
+            raise RuntimeError('Experimental real FM requires --ymfm-root at pinned BSD ymfm commit')
+        ymfm_root=Path(opts.ymfm_root).expanduser().resolve(strict=True)
+        revision=subprocess.check_output(['git','-C',str(ymfm_root),'rev-parse','HEAD'],text=True).strip()
+        if revision!=YMFM_PIN:
+            raise RuntimeError('External ymfm revision not pinned; no bundled substitute')
+        ymfm_source=ymfm_root/'src'
+        for name in YMFM_FILES:
+            if not (ymfm_source/name).is_file():
+                raise RuntimeError('Pinned YM2151 core missing: '+name)
+        if not shutil.which(os.environ.get('EMXX','em++')):
+            raise RuntimeError('Emscripten C++ linker missing; cannot link actual ymfm')
+
+    if opts.experimental_zmusic and not (ROOT/'core'/'pwp_zm2_preboot.inc').is_file():
+        raise RuntimeError('Experimental boot source absent')
     # Actual source files and local source itself are NEVER edited. Two
     # temporary directories in R12 isolate input snapshot and output stage.
     vendor=ROOT/'vendor'; vendor.mkdir(exist_ok=True)
@@ -106,16 +125,50 @@ def compile_and_test(opts, source, x):
         patch_record = patch_private_copy(snap/'m68kcpu.c')
         print('PASS isolated non-ESP fetch restoration:', patch_record, flush=True)
         out=work/'pwp_musashi.mjs'
-        cmd=[emcc,'-O2','-std=gnu11','-I',snap,'-I',snap/'softfloat',
+        exports=EXPORTS+(['pwp_mu_tsr_begin','pwp_mu_tsr_phase','pwp_mu_tsr_steps'] if opts.experimental_zmusic else [])
+        flags=['-DPWP_EXPERIMENTAL_ZM2=1'] if opts.experimental_zmusic else []
+        sources=[ROOT/'core'/'pwp_hu_resident.c'] if opts.experimental_zmusic else []
+        cmd=[emcc,'-O2','-std=gnu11','-I',snap,'-I',snap/'softfloat',*flags,
              '-DPWP_TAB5_MUSASHI=1',
              '-sMODULARIZE=1','-sEXPORT_ES6=1','-sENVIRONMENT=web,worker,node',
              '-sALLOW_MEMORY_GROWTH=1','-sINITIAL_MEMORY=33554432',
              '-sMAXIMUM_MEMORY=67108864','-sFILESYSTEM=0',
-             '-sEXPORTED_FUNCTIONS='+str(['_'+n for n in EXPORTS]).replace(' ','').replace('"',"'"),
+             '-sEXPORTED_FUNCTIONS='+str(['_'+n for n in exports]).replace(' ','').replace('"',"'"),
              '-sEXPORTED_RUNTIME_METHODS=["HEAPU8"]','--no-entry',
              ROOT/'core'/'pwp_musashi.c',ROOT/'core'/'pwp_x68k_video_bus.c',
-             ROOT/'core'/'pwp_x68k_frame.c',snap/'m68kcpu.c',snap/'m68kops.c',
+             ROOT/'core'/'pwp_x68k_frame.c',*sources,snap/'m68kcpu.c',snap/'m68kops.c',
              snap/'softfloat'/'softfloat.c','-lm','-o',out]
+        if opts.experimental_zmusic:
+            # Compile .c as strict C and .cpp as C++14; do not force the
+            # Human68k/Musashi C adapter through a C++ compiler.
+            emxx=shutil.which(os.environ.get('EMXX','em++'))
+            c_inputs=[ROOT/'core'/'pwp_musashi.c',ROOT/'core'/'pwp_x68k_video_bus.c',
+                      ROOT/'core'/'pwp_x68k_frame.c',*sources,
+                      snap/'m68kcpu.c',snap/'m68kops.c',snap/'softfloat'/'softfloat.c']
+            objects=[]
+            for index,src in enumerate(c_inputs):
+                obj=work/f'c_{index}.o'
+                invoke([emcc,'-O2','-std=gnu11','-I',snap,'-I',snap/'softfloat',
+                        '-DPWP_EXPERIMENTAL_ZM2=1','-DPWP_TAB5_MUSASHI=1',
+                        '-c',src,'-o',obj])
+                objects.append(obj)
+            for index,src in enumerate([ROOT/'core'/'pwp_ym2151_ymfm.cpp',ymfm_source/'ymfm_opm.cpp']):
+                obj=work/f'cxx_{index}.o'
+                invoke([emxx,'-O2','-std=c++14','-I',ROOT/'core','-I',ymfm_source,
+                        '-c',src,'-o',obj])
+                objects.append(obj)
+            fm_exports=['pwp_mu_fm_pending','pwp_mu_fm_pop',
+                        'pwp_mu_fm_rate','pwp_mu_fm_overflows',
+                        'pwp_mu_opm_register_writes','pwp_mu_opm_acks',
+                        'pwp_mu_zmusic_trap3_calls','pwp_mu_zmusic_last_fn',
+                        'pwp_mu_opm_keyons','pwp_mu_opm_timer_commands','pwp_mu_opm_register']
+            cmd=[emxx,'-O2',
+                 '-sMODULARIZE=1','-sEXPORT_ES6=1','-sENVIRONMENT=web,worker,node',
+                 '-sALLOW_MEMORY_GROWTH=1','-sINITIAL_MEMORY=33554432',
+                 '-sMAXIMUM_MEMORY=67108864','-sFILESYSTEM=0',
+                 '-sEXPORTED_FUNCTIONS='+str(['_'+n for n in exports+fm_exports]).replace(' ','').replace('"',"'"),
+                 '-sEXPORTED_RUNTIME_METHODS=["HEAPU8"]','--no-entry',*objects,
+                 '-lm','-o',out]
         invoke(cmd)
         wasm=out.with_suffix('.wasm')
         if not out.is_file() or not wasm.is_file() or wasm.read_bytes()[:4]!=b'\0asm':
@@ -123,6 +176,29 @@ def compile_and_test(opts, source, x):
         # No fake CPU is ever accepted. The genuine code must execute a
         # synthetic HU AND the authentic PANIC.X up to the first DOS service.
         invoke([node,ROOT/'tools'/'RUN_R9_CPU_SMOKE.mjs',out])
+        if opts.experimental_zmusic:
+            invoke([node,ROOT/'tools'/'RUN_ZM2_REAL_TSR_CPU.mjs',out])
+            if opts.zmusic_driver:
+                invoke([node,ROOT/'tools'/'RUN_ZM2_REAL_DRIVER_PROBE.mjs',out,opts.zmusic_driver])
+                invoke([node,ROOT/'tools'/'RUN_ZM2_BROWSER_BRIDGE.mjs',
+                        out,opts.zmusic_driver,ROOT/'core'/'PANIC.X'])
+                for pan_file in ([opts.zmusic_pan] if opts.zmusic_pan else [])+(opts.regression_pan or []):
+                    invoke([node,ROOT/'tools'/'RUN_ZM2_REAL_PAN_PLAYBACK.mjs',
+                            out,opts.zmusic_driver,ROOT/'core'/'PANIC.X',pan_file])
+            # Only explicitly requested *local preview* output is copied after
+            # the real CPU/driver and all PAN regressions pass. Never publish to
+            # core/, dist/ or Pages. There is no .X driver or PAN in the output.
+            if opts.experimental_preview_dir:
+                dest=Path(opts.experimental_preview_dir).resolve()
+                permitted=(ROOT/'_preview_stage'/'core').resolve()
+                if dest!=permitted:
+                    raise RuntimeError('Experimental preview directory must be _preview_stage/core')
+                dest.mkdir(parents=True,exist_ok=True)
+                for f in (out,wasm):
+                    shutil.copyfile(f,dest/f.name)
+                print('PASS isolated local preview WASM staged after full real-PAN regressions')
+            print('PASS isolated real Musashi Z-MUSIC TSR + native FM/ADPCM regression checks')
+            return  # Never publish experimental WASM to core/ or GitHub Pages.
         invoke([node,ROOT/'tools'/'RUN_R9_PANIC_BOOT.mjs',out,x])
         invoke([node,ROOT/'tools'/'RUN_R14_WASM_GUEST_IO.mjs',out])
         invoke([node,ROOT/'tools'/'RUN_R16_FIX4_SUPER_CPU.mjs',out,x])
@@ -178,6 +254,12 @@ def main():
     a=argparse.ArgumentParser(description=__doc__)
     a.add_argument('--x68ktab-root',help='Read-only X68KTab5 source checkout (e.g. G:\\X68KTab5)')
     a.add_argument('--tab5-musashi-source',help='Read-only directory that holds m68kcpu.c/m68kops.c')
+    a.add_argument('--experimental-zmusic',action='store_true',help='Isolated real TSR boot; not Pages')
+    a.add_argument('--zmusic-driver',help='Hash-verified real ZMUSIC208.X for boot observation')
+    a.add_argument('--zmusic-pan',help='Original denkozm.pan to require actual guest picture and FM')
+    a.add_argument('--regression-pan',action='append',help='Additional actual sound PAN regression file')
+    a.add_argument('--experimental-preview-dir',help='Opt-in isolated _preview_stage/core destination after verified CI')
+    a.add_argument('--ymfm-root',help='Read-only pinned external BSD ymfm git checkout (experimental)')
     a.add_argument('--panic-source',help='Local src/panic_x_bin.c, read-only')
     a.add_argument('--panic-x',help='Authentic original PANIC.X, read-only')
     opts=a.parse_args()

@@ -52,3 +52,16 @@ py -3 tools\START_PLAY.py --source "G:\X68KTab5" --pan "G:\MyPAN\example.PAN"
 The repository MIT license applies **only to new material owned by Layer812**. It does not relicense third-party code, binaries or PAN files.
 
 Thanks to everyone who created, preserved and shared X68000/PANIC culture.
+
+
+## Z-MUSIC v2.08 / YM2151 FM (public release, October 29, 2026)
+
+The public browser edition now runs authentic **Z-MUSIC SYSTEM v2.08** resident with original **PANIC.X V1.38** on the real **Musashi Motorola 68000**, including real guest TRAP #3, interrupt-driven YM2151 FM playback, and ADPCM support. It remains a lightweight PANIC movie player, not a general X68000 emulator.
+
+- `denkozm.pan`: genuine Z-MUSIC-controlled YM2151 FM; browser listening and audio/video synchronization confirmed by a tester.
+- `denkofm.pan`: direct YM2151 FM playback.
+- `denkopcm.pan`: guest ADPCM decoding.
+
+Press **PLAY** to unlock browser audio; autoplay may require a click. FM synthesis uses Aaron Giles' **ymfm** under BSD-3-Clause (license included in the published WASM site). Original Z-MUSIC is © **Zenji Nishikawa**. Its original executable is not bundled: the browser downloads exactly a fixed, hash-verified copy from a published third-party project when the player starts.
+
+Source credits, original author notices, and licensing links are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). All PAN artworks and music remain the property of their authors.

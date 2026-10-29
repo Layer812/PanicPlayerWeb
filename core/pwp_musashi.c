@@ -8,6 +8,10 @@
 #include <string.h>
 #include "m68k.h"
 #include "pwp_x68k_video_bus.h"
+#ifdef PWP_EXPERIMENTAL_ZM2
+#include "pwp_hu_resident.h"
+#include "pwp_ym2151_bridge.h"
+#endif
 
 #define PWP_RAM_BYTES (4u * 1024u * 1024u)
 #define PWP_HU_CAP (1024u * 1024u)
@@ -36,6 +40,9 @@ static uint8_t ram[PWP_RAM_BYTES];
 static uint64_t pwp_guest_cycles, pwp_next_vdisp, pwp_next_scanout;
 static uint32_t pwp_vdisp_ticks, pwp_vdisp_acks, pwp_scanout_ticks;
 static int pwp_vdisp_pending;
+#ifdef PWP_EXPERIMENTAL_ZM2
+static uint32_t pwp_opm_acks,pwp_trap3_calls,pwp_trap3_last_fn;
+#endif
 #ifdef PWP_TAB5_MUSASHI
 int my_irqh_callback(int level) {
   if (level == 6 && pwp_bus_mfp_vdisp_irq_ready()) {
@@ -44,6 +51,14 @@ int my_irqh_callback(int level) {
     pwp_vdisp_acks++;
     return 0x46; /* MC68901 GPIP4, default X68000 vector base $40 */
   }
+#ifdef PWP_EXPERIMENTAL_ZM2
+  if (level == 6 && pwp_bus_mfp_opm_irq_ready()) {
+    pwp_bus_mfp_opm_ack();
+    pwp_vdisp_pending = 0;
+    ++pwp_opm_acks;
+    return 0x43; /* Actual MFP GPIP3 OPM hardware vector. */
+  }
+#endif
   return -1; /* Others retain Musashi's autovector fallback. */
 }
 #endif
@@ -87,6 +102,24 @@ void pwp_mu_test_advance_cycles(uint32_t delta) { pwp_advance_vdisp(delta); }
 
 
 static uint8_t stage[PWP_HU_CAP];
+#ifdef PWP_EXPERIMENTAL_ZM2
+/* Guest-side real CPU resident preboot, disabled in Pages production. */
+#define PWP_TSR_MCB 0x0023fff0u
+#define PWP_TSR_LOAD 0x00240000u
+#define PWP_TSR_END 0x003c0000u
+#define PWP_TSR_STACK 0x003e0000u
+#define PWP_TSR_CMD 0x00008100u
+#define PWP_TSR_ENV 0x0023fc00u
+#define PWP_TSR_PSP 0x0023fd00u
+static uint8_t tsr_saved_context[4096];
+static uint32_t tsr_context_bytes, tsr_heap, tsr_status, tsr_steps;
+static uint64_t tsr_saved_cycles,tsr_saved_vdisp,tsr_saved_scanout;
+static uint32_t tsr_saved_ticks,tsr_saved_scans,tsr_saved_acks;
+static int tsr_boot_active;
+static uint32_t tsr_opm_isr_address;
+/* X68000 16x16 gaiji glyphs $7670-$7675: pristine font RAM starts blank. */
+static uint8_t tsr_gaiji[6][32];
+#endif
 static uint32_t size_image, size_bss, guest_steps, blocked_at, fault_addr;
 static uint16_t blocked_op;
 /* 0 reset; 1 active; 2 pending DOS/IOCS trap; 3 host read pending;
@@ -196,11 +229,39 @@ static void invalid_bus(uint32_t address) {
 static uint32_t physical24(uint32_t a) {return a & 0x00ffffffu;}
 static int address8(uint32_t a, int for_write) {
   a=physical24(a);
+#ifdef PWP_EXPERIMENTAL_ZM2
+  if(!for_write && (tsr_boot_active || tsr_status==2u) &&
+     a>=0x00fefff0u && a<0x00ff0020u)return 1;
+  if((tsr_boot_active || tsr_status==2u) && !for_write &&
+     (a==0x00e9a001u || a==0x00e9a003u))return 1;
+#endif
   return within(a,1)||(for_write?pwp_bus_writable8(a):pwp_bus_access8(a));
 }
 static int busread(uint32_t a,uint8_t *value) {
   a=physical24(a);
   if(within(a,1)){*value=ram[a];return 1;}
+#ifdef PWP_EXPERIMENTAL_ZM2
+  /* 8255 ports A/B sample joystick #1/#2; all inputs high when idle.
+   * Only readable input ports, no fictional devices or joystick keypresses. */
+  if((tsr_boot_active || tsr_status==2u) &&
+     (a==0x00e9a001u || a==0x00e9a003u)) {
+    *value=0xffu;return 1;
+  }
+  if((tsr_boot_active || tsr_status==2u) && a==0x00e88001u) {
+    /* X68000 MFP GPIP bit7 is H-SYNC, not a permanently high level.
+     * 15.75 kHz at a virtual 16 MHz CPU => 1016 guest cycles per line.
+     * Preserve every other MFP bit from the real emulated register. */
+    uint8_t gpip=0;
+    if(!pwp_bus_read8(a,&gpip))return 0;
+    const uint64_t phase=pwp_guest_cycles%1016ull;
+    *value=(uint8_t)((gpip&0x7fu)|(phase<508ull ? 0x80u : 0u));
+    return 1;
+  }
+  /* Minimal IPL ROM window: readable signatures before default trap
+   * vectors, but no emulated resident driver or executable ROM service. */
+  if((tsr_boot_active || tsr_status==2u) &&
+     a>=0x00fefff0u && a<0x00ff0020u){*value=0;return 1;}
+#endif
   return pwp_bus_read8(a,value);
 }
 static int buswrite(uint32_t a,uint8_t v) {
@@ -270,6 +331,15 @@ void pwp_mu_reset(void) {
   w32(ram+0x8cu,0x00ff0000u);
   pwp_bus_reset();
   size_image=size_bss=guest_steps=blocked_at=fault_addr=0;
+#ifdef PWP_EXPERIMENTAL_ZM2
+  tsr_context_bytes=tsr_heap=tsr_status=tsr_steps=0;
+  tsr_saved_cycles=tsr_saved_vdisp=tsr_saved_scanout=0;
+  tsr_saved_ticks=tsr_saved_scans=tsr_saved_acks=0;
+  tsr_boot_active=0;
+  tsr_opm_isr_address=0;
+  pwp_opm_acks=pwp_trap3_calls=pwp_trap3_last_fn=0;
+  memset(tsr_gaiji,0,sizeof(tsr_gaiji));
+#endif
   pwp_guest_cycles=0;
   pwp_next_vdisp=PWP_ACTIVE_CYCLES;
   pwp_next_scanout=PWP_VDISP_CYCLES;
@@ -606,6 +676,9 @@ static int virtual_file_match(const char *raw) {
   if(strchr(p,'/')||strchr(p,'\\')||strchr(p,':'))return 0;
   return virtual_name_match(p);
 }
+#ifdef PWP_EXPERIMENTAL_ZM2
+#include "pwp_zm2_preboot.inc"
+#endif
 /* Human68k passes the most recently pushed arguments first on the user
  * stack, in big-endian word/longword slots. Malformed guest pointers fail
  * with a DOS-style error and never access outside guest RAM. */
@@ -620,6 +693,110 @@ int32_t pwp_mu_dispatch(void) {
    * are implemented. Other IOCS calls fail closed. */
   if(blocked_op==0x4e4fu) {
     const uint32_t fn=m68k_get_reg(NULL,M68K_REG_D0)&0xffu;
+#ifdef PWP_EXPERIMENTAL_ZM2
+    if(tsr_boot_active && fn==0x60u) { /* Real IOCS _ADPCMOUT bootstrap sample. */
+      const uint32_t mode=m68k_get_reg(NULL,M68K_REG_D1)&0xffffu;
+      const uint32_t bytes=m68k_get_reg(NULL,M68K_REG_D2);
+      const uint32_t source=m68k_get_reg(NULL,M68K_REG_A1);
+      /* Original ZMUSIC208.X init_all plays dummy_data[32] at 15.6kHz,
+       * stereo. Until a complete DMA/DRQ implementation is present, only
+       * THIS verified 32-byte startup transfer is supported; no arbitrary
+       * guest audio DMA is silently accepted or synthesized. */
+      if(mode!=0x0403u || bytes!=32u || !within(source,bytes))
+        return state=-18;
+      if(!pwp_bus_write8(0x00e92001u,2u))return state=-18;
+      for(uint32_t i=0;i<bytes;i++){
+        if(!pwp_bus_write8(0x00e92003u,ram[source+i]))return state=-18;
+      }
+      if(!pwp_bus_write8(0x00e92001u,1u))return state=-18;
+      complete_dos(0);return state;
+    }
+    if(tsr_boot_active && fn==0x8au) { /* Real IOCS _DMAMOVE: safe byte DMA. */
+      const uint32_t mode=m68k_get_reg(NULL,M68K_REG_D1)&0xffu;
+      const uint32_t n=m68k_get_reg(NULL,M68K_REG_D2);
+      const uint32_t source=m68k_get_reg(NULL,M68K_REG_A1);
+      const uint32_t dest=m68k_get_reg(NULL,M68K_REG_A2);
+      /* Physical DMA direction: D1=$05 means A1++ to A2++.
+       * Real Z-MUSIC uses it for bulk initialization of the voice table.
+       * Do not pretend unsupported fixed/descending transfer modes work. */
+      if(mode!=5u || !n || n>0xff00u ||
+         !within(source,n) || !within(dest,n))return state=-18;
+      /* Authentic DMA does A1++ -> A2++ in forward byte order.
+       * Z-MUSIC intentionally overlaps these buffers to fill voice slots.
+       * Standard memmove copies backward and would corrupt that behavior. */
+      for(uint32_t i=0;i<n;i++)ram[dest+i]=ram[source+i];
+      complete_dos(0);return state;
+    }
+    if(tsr_boot_active && fn==0x6au) { /* IOCS _OPMINTST: register REAL guest ISR. */
+      const uint32_t handler=m68k_get_reg(NULL,M68K_REG_A1);
+      if(handler && ((handler&1u)||!within(handler,2u)))return state=-18;
+      /* _OPMINTST installs the authentic guest handler into MFP vector
+       * $43 at $10C. Earlier code only remembered A1 in host state, leaving
+       * the guest vector pointed at IPL ROM, so real Timer B could never
+       * drive Z-MUSIC's sequencer. Do NOT call the handler from host code:
+       * Musashi's real IRQ acknowledge fetches this actual 68000 vector. */
+      tsr_opm_isr_address=handler;
+      w32(ram+0x10cu,handler ? handler : 0x00ff0000u);
+      complete_dos(0);return state;
+    }
+    if(tsr_boot_active && fn==0x81u) { /* IOCS _B_SUPER: real SR/stack banks. */
+      const uint32_t target=m68k_get_reg(NULL,M68K_REG_A1);
+      const uint32_t sr=m68k_get_reg(NULL,M68K_REG_SR);
+      if(!target) {
+        if(sr&0x2000u){complete_dos(-1);return state;}
+        const uint32_t old=m68k_get_reg(NULL,M68K_REG_ISP);
+        const uint32_t usp=m68k_get_reg(NULL,M68K_REG_USP);
+        if((old&1u)||!within(old,1u)||!within(usp,1u))return state=-18;
+        m68k_set_reg(M68K_REG_SR,sr|0x2000u);
+        m68k_set_reg(M68K_REG_USP,usp);
+        m68k_set_reg(M68K_REG_ISP,usp);
+        complete_dos((int32_t)old);return state;
+      }
+      if(!(sr&0x2000u)||(target&1u)||!within(target,1u))
+        return state=-18;
+      const uint32_t usp=m68k_get_reg(NULL,M68K_REG_USP);
+      if((usp&1u)||!within(usp,1u))return state=-18;
+      m68k_set_reg(M68K_REG_SR,sr&~0x2000u);
+      m68k_set_reg(M68K_REG_ISP,target);
+      m68k_set_reg(M68K_REG_USP,usp);
+      complete_dos(0);return state;
+    }
+    if(tsr_boot_active && fn==0x0fu) { /* IOCS _DEFCHR: genuine 16x16 gaiji restore. */
+      const uint32_t d1=m68k_get_reg(NULL,M68K_REG_D1);
+      const uint32_t code=d1&0xffffu;
+      const uint32_t bitmap=m68k_get_reg(NULL,M68K_REG_A1);
+      /* Z-MUSIC's do_gj feeds only the 32-byte pixel bitmap, not a
+       * _FNTGET-style width/height header. Maintain a real guest glyph bank. */
+      if((d1>>16)!=8u || code<0x7670u || code>0x7675u ||
+         (bitmap&1u) || !within(bitmap,32u))return state=-18;
+      memcpy(tsr_gaiji[code-0x7670u],ram+bitmap,32u);
+      complete_dos(0);return state;
+    }
+    if(tsr_boot_active && fn==0x19u) { /* IOCS _FNTGET, documented D1/A1 ABI. */
+      const uint32_t d1=m68k_get_reg(NULL,M68K_REG_D1);
+      const uint32_t code=d1&0xffffu;
+      const uint32_t buffer=m68k_get_reg(NULL,M68K_REG_A1);
+      /* Z-MUSIC saves the six 16x16 user-definable glyphs. Preserve the
+       * genuine, initially-empty gaiji bank rather than fabricating art. */
+      if((d1>>16)!=8u || code<0x7670u || code>0x7675u ||
+         (buffer&1u) || !within(buffer,36u))return state=-18;
+      w16(ram+buffer,16u);w16(ram+buffer+2u,16u);
+      memcpy(ram+buffer+4u,tsr_gaiji[code-0x7670u],32u);
+      complete_dos(0);return state;
+    }
+    if(tsr_boot_active && fn==0x80u) { /* Guest IOCS _B_INTVCS. */
+      const uint32_t vec=m68k_get_reg(NULL,M68K_REG_D1)&0xffffu;
+      const uint32_t new_addr=m68k_get_reg(NULL,M68K_REG_A1);
+      uint32_t old;
+      if((new_addr&1u)||!within(new_addr,2))return state=-18;
+      if(vec<256u){
+        old=u32(ram+vec*4u);w32(ram+vec*4u,new_addr);
+      }else if(vec>=0x100u && vec<=0x1ffu){
+        old=iocs_vectors[vec-0x100u];iocs_vectors[vec-0x100u]=new_addr;
+      }else return state=-18;
+      complete_dos((int32_t)old);return state;
+    }
+#endif
     if(fn==0x67u) { /* _ADPCMMOD: D1.L stop=0, pause=1, resume=2. */
       const uint32_t control=m68k_get_reg(NULL,M68K_REG_D1);
       if(control>2u){complete_dos(-1);return state;}
@@ -809,6 +986,61 @@ int32_t pwp_mu_dispatch(void) {
        * Do not silently consume unsupported controls. */
       break;
     }
+#ifdef PWP_EXPERIMENTAL_ZM2
+    case 0xff1e: { /* Human68k DOS _FPUTS: output to console handles. */
+      if(!tsr_boot_active)break;
+      if(!within(sp,6u)){complete_dos(-14);break;}
+      const uint32_t str=u32(ram+sp);
+      const uint16_t handle=u16(ram+sp+4u);
+      if(handle!=1u && handle!=2u){complete_dos(-6);break;}
+      if(!within(str,1u)){complete_dos(-14);break;}
+      /* Do not read arbitrary guest memory or synthesize terminal output.
+       * The actual ZMUSIC.X guest provides the exact string bytes. */
+      uint32_t n=0u;
+      while(n<65536u && within(str+n,1u) && ram[str+n])n++;
+      if(n>=65536u || !within(str+n,1u)){complete_dos(-14);break;}
+      for(uint32_t i=0;i<n;i++){
+        if(console_length<PWP_CONSOLE_CAP)console_bytes[console_length++]=ram[str+i];
+        else console_truncated=1;
+      }
+      complete_dos(0);break;
+    }
+    case 0xff81: /* DOS _GETPDB: process descriptor, Human68k 3.x alias. */
+    case 0xff51: /* DOS _GETPDB: classic entry. */
+      if(!tsr_boot_active)break;
+      /* The actual ZMUSIC.X guest was loaded in its own MCB/PSP,
+       * which starts 16 bytes after $23FFF0; do not synthesize metadata. */
+      complete_dos((int32_t)PWP_TSR_PSP);break;
+    case 0xfff7: { /* DOS _BUS_ERR: real bounded memory-access probe/copy. */
+      if(!tsr_boot_active)break;
+      /* Stack order: P2.l destination, P1.l source, SIZE.w (1/2/4).
+       * When a genuine guest address is readable/writable, copy exactly
+       * that number of bytes; otherwise report a guest address error.
+       * Never map arbitrary MIDI-board, host, or firmware memory. */
+      if(!within(sp,10u)){complete_dos(-14);break;}
+      const uint32_t dst=u32(ram+sp),src=u32(ram+sp+4u);
+      const uint16_t n=u16(ram+sp+8u);
+      if((n!=1u&&n!=2u&&n!=4u) ||
+         (n!=1u && ((src|dst)&1u)) ||
+         !within(src,n)||!within(dst,n)){
+        complete_dos(-14);break;
+      }
+      memmove(ram+dst,ram+src,n);
+      complete_dos(0);break;
+    }
+    case 0xff30: /* DOS _VERNUM: Human68k 3.02 virtual OS version. */
+      if(!tsr_boot_active)break;
+      complete_dos((int32_t)0x36380302u);break;
+    case 0xff31: /* DOS _KEEPPR: real driver must install TRAP #3 first. */
+      if(tsr_boot_active) {
+        if(!within(sp,6u))return state=-18;
+        const uint32_t length=u32(ram+sp);
+        const uint16_t code=u16(ram+sp+4u);
+        if(code || length>PWP_TSR_END-PWP_TSR_LOAD)return state=-18;
+        return pwp_mu_tsr_keeppr(length);
+      }
+      break;
+#endif
     case 0xff00: /* _EXIT: finish process with no error. */
       pan_open=0; pan_pos=0; process_exit_code=0;
       state=4;
@@ -912,7 +1144,11 @@ int32_t pwp_mu_dispatch(void) {
       break;
     case 0xff48: /* _MALLOC(size.l) */
       if(!within(sp,4))return state=-8;
+#ifdef PWP_EXPERIMENTAL_ZM2
+      complete_dos(tsr_boot_active ? pwp_mu_tsr_malloc(u32(ram+sp)) : malloc_guest(u32(ram+sp)));
+#else
       complete_dos(malloc_guest(u32(ram+sp)));
+#endif
       break;
     case 0xff49: /* _MFREE(ptr.l) */
       if(!within(sp,4))return state=-8;
@@ -1020,6 +1256,11 @@ int32_t pwp_mu_run(uint32_t max_instructions) {
     uint32_t pc=m68k_get_reg(NULL,M68K_REG_PC);
     if (!within(pc,2)) {state=-8;fault_addr=pc;break;}
     uint16_t op=u16(ram+pc);
+#ifdef PWP_EXPERIMENTAL_ZM2
+    if(tsr_status==2u && op==0x4e43u){
+      ++pwp_trap3_calls;pwp_trap3_last_fn=m68k_get_reg(NULL,M68K_REG_D1);
+    }
+#endif
     if ((op&0xff00u)==0xff00u || op==0x4e4fu) {
       blocked_at=pc;blocked_op=op;state=2;break;
     }
@@ -1029,8 +1270,19 @@ int32_t pwp_mu_run(uint32_t max_instructions) {
 #ifdef PWP_TAB5_MUSASHI
     /* Register writes may have unmasked a prior IPRB pending event;
      * assert IRQ only after the guest has installed its vector. */
-    if (pwp_bus_mfp_vdisp_irq_ready() &&
-        (ram[0x118u] | ram[0x119u] | ram[0x11au] | ram[0x11bu])) {
+    int vdisp_ready = pwp_bus_mfp_vdisp_irq_ready() &&
+        (ram[0x118u] | ram[0x119u] | ram[0x11au] | ram[0x11bu]);
+#ifdef PWP_EXPERIMENTAL_ZM2
+    /* Only the original resident driver's installed VECTOR may receive
+     * an OPM interrupt; never call the handler from host C. */
+    const uint32_t opm_vector=u32(ram+0x10cu);
+    const int opm_ready=(tsr_status==2u || tsr_boot_active) &&
+        opm_vector>=PWP_TSR_LOAD && opm_vector<PWP_TSR_END &&
+        !(opm_vector&1u) && pwp_bus_mfp_opm_irq_ready();
+#else
+    const int opm_ready=0;
+#endif
+    if (vdisp_ready || opm_ready) {
       if (!pwp_vdisp_pending) {
         pwp_vdisp_pending=1;
         m68k_set_irq(6);
@@ -1041,7 +1293,11 @@ int32_t pwp_mu_run(uint32_t max_instructions) {
       pwp_vdisp_pending=0;
       m68k_set_irq(0);
     }
-    const uint32_t acks_before=pwp_vdisp_acks;
+    const uint32_t acks_before=pwp_vdisp_acks
+#ifdef PWP_EXPERIMENTAL_ZM2
+      +pwp_opm_acks
+#endif
+      ;
 #endif
     const uint32_t scanout_before=pwp_scanout_ticks;
     const int used=m68k_execute(1);
@@ -1054,7 +1310,11 @@ int32_t pwp_mu_run(uint32_t max_instructions) {
     if(!pwp_bus_dma3_step(used>0?(uint32_t)used:1u,ram,PWP_RAM_BYTES))
       invalid_bus(pwp_bus_dma3_fault_address());
 #ifdef PWP_TAB5_MUSASHI
-    if (pwp_vdisp_acks!=acks_before) {m68k_set_irq(0);pwp_vdisp_pending=0;}
+    if (pwp_vdisp_acks
+#ifdef PWP_EXPERIMENTAL_ZM2
+        +pwp_opm_acks
+#endif
+        !=acks_before) {m68k_set_irq(0);pwp_vdisp_pending=0;}
 #endif
     /* FIX23: return to browser at start-of-visible scanout, AFTER the guest
      * ISR has had the blanking interval in which to change displayed pages.
@@ -1160,3 +1420,18 @@ uint32_t pwp_mu_video_graphic_word(uint32_t x,uint32_t y){return pwp_bus_graphic
 uint32_t pwp_mu_mfp_ierb_reads(void){return pwp_bus_mfp_ierb_reads();}
 uint32_t pwp_mu_mfp_imrb_reads(void){return pwp_bus_mfp_imrb_reads();}
 uint32_t pwp_mu_mfp_last_read_address(void){return pwp_bus_mfp_last_read_address();}
+
+#ifdef PWP_EXPERIMENTAL_ZM2
+/* Read-only actual YM2151 waveform FIFO, produced only from guest MMIO. */
+uint32_t pwp_mu_fm_pending(void){return pwp_ym2151_pending();}
+uint32_t pwp_mu_fm_pop(void){return pwp_ym2151_pop();}
+uint32_t pwp_mu_fm_rate(void){return pwp_ym2151_sample_rate();}
+uint32_t pwp_mu_fm_overflows(void){return pwp_ym2151_overflows();}
+uint32_t pwp_mu_opm_register_writes(void){return pwp_bus_opm_register_writes();}
+uint32_t pwp_mu_opm_acks(void){return pwp_opm_acks;}
+uint32_t pwp_mu_zmusic_trap3_calls(void){return pwp_trap3_calls;}
+uint32_t pwp_mu_zmusic_last_fn(void){return pwp_trap3_last_fn;}
+uint32_t pwp_mu_opm_keyons(void){return pwp_bus_opm_keyons();}
+uint32_t pwp_mu_opm_timer_commands(void){return pwp_bus_opm_timer_commands();}
+uint32_t pwp_mu_opm_register(uint32_t index){return pwp_bus_opm_register(index);}
+#endif
