@@ -78,6 +78,38 @@ jobs:
           test -s core/pwp_musashi.wasm
           test -s core/PANIC.X
 
+      - name: Checkout pinned BSD-3-Clause YM2151 core
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/aaronsgiles/ymfm.git _ymfm
+          git -C _ymfm fetch --depth 1 origin 81aec25ccbb98f4873a255f7551ac4dadac59b4a
+          git -C _ymfm checkout --detach 81aec25ccbb98f4873a255f7551ac4dadac59b4a
+          test "$(git -C _ymfm rev-parse HEAD)" = "81aec25ccbb98f4873a255f7551ac4dadac59b4a"
+          test -s _ymfm/LICENSE
+
+      - name: Validate original Z-MUSIC 2.08 program upstream
+        run: |
+          curl --fail --location --silent --show-error --retry 3 \
+            https://raw.githubusercontent.com/toyoshim/z-music.js/fd6ad1c1db9edcf973283597e2c95cedf17eb701/x/ZMUSIC208.X \
+            --output "$RUNNER_TEMP/ZMUSIC208.X"
+          test "$(git hash-object "$RUNNER_TEMP/ZMUSIC208.X")" = "4a4d88b3a620694cad3f27739e5b6a4d70cfbbbf"
+
+      - name: Build and accept genuine Z-MUSIC/FM/ADPCM against three PANs
+        run: |
+          python tools/BUILD_R12_ACTUAL.py --x68ktab-root "$GITHUB_WORKSPACE/_x68ktab" \
+            --experimental-zmusic --ymfm-root "$GITHUB_WORKSPACE/_ymfm" \
+            --zmusic-driver "$RUNNER_TEMP/ZMUSIC208.X" \
+            --zmusic-pan "$GITHUB_WORKSPACE/pan/denkozm.pan" \
+            --regression-pan "$GITHUB_WORKSPACE/pan/denkofm.pan" \
+            --regression-pan "$GITHUB_WORKSPACE/pan/denkopcm.pan" \
+            --experimental-preview-dir "$GITHUB_WORKSPACE/_preview_stage/core"
+          test -s _preview_stage/core/pwp_musashi.mjs
+          test -s _preview_stage/core/pwp_musashi.wasm
+          # Only the complete acceptance-tested real 68000+ymfm pair is
+          # promoted into the site staging inputs. Never bundle ZMUSIC208.X.
+          cp _preview_stage/core/pwp_musashi.mjs core/pwp_musashi.mjs
+          cp _preview_stage/core/pwp_musashi.wasm core/pwp_musashi.wasm
+          test ! -e core/ZMUSIC208.X
+
       - name: Assemble minimal static site with license materials
         run: |
           python tools/BUILD_PAGES_SITE.py --root . --output _site --original-docs _panic_docs
@@ -87,6 +119,8 @@ jobs:
           test -f _site/core/pwp_musashi.wasm
           test -f _site/core/PANIC.X
           test -f _site/legal/Musashi_LICENSE.txt
+          test -f _site/legal/ymfm_LICENSE.txt
+          test ! -e _site/core/ZMUSIC208.X
           test -f _site/legal/SoftFloat_README.txt
           test -f _site/legal/panic.doc
           test ! -e _site/tests
