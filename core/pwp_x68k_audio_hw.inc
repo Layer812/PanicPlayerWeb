@@ -18,6 +18,7 @@ static uint8_t pwp_opm_ct, pwp_adpcm_playing, pwp_pia_port_c;
  * synthesized through a separate, pinned BSD ymfm component. */
 static uint8_t pwp_zm2_opm_registers[256];
 static uint32_t pwp_zm2_opm_register_writes;
+static uint32_t pwp_zm2_opm_keyons,pwp_zm2_opm_timer_commands;
 #include "pwp_ym2151_timer.inc"
 #endif
 /* Audible byte FIFO preserves chronological PANIC.X PCM data and channel/rate
@@ -72,6 +73,7 @@ static void pwp_audio_reset(void) {
 #ifdef PWP_EXPERIMENTAL_ZM2
     for(uint32_t i=0;i<256u;i++)pwp_zm2_opm_registers[i]=0u;
     pwp_zm2_opm_register_writes=0;
+    pwp_zm2_opm_keyons=pwp_zm2_opm_timer_commands=0;
     pwp_zm2_timer_reset();
 #ifndef PWP_ZM2_TIMER_TEST
     pwp_ym2151_reset();
@@ -124,6 +126,8 @@ static int pwp_audio_write8(uint32_t addr,uint8_t value) {
          * guest-cycle-based timer/OPM IRQ model, without host-side music. */
         pwp_zm2_opm_registers[opm_register_latch]=value;
         ++pwp_zm2_opm_register_writes;
+        if(opm_register_latch==0x08u && (value&0x78u))++pwp_zm2_opm_keyons;
+        if(opm_register_latch==0x14u)++pwp_zm2_opm_timer_commands;
         pwp_zm2_timer_write(opm_register_latch,value);
 #ifndef PWP_ZM2_TIMER_TEST
         pwp_ym2151_write(opm_register_latch,value);
