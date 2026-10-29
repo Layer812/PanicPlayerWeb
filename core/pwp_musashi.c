@@ -41,7 +41,7 @@ static uint64_t pwp_guest_cycles, pwp_next_vdisp, pwp_next_scanout;
 static uint32_t pwp_vdisp_ticks, pwp_vdisp_acks, pwp_scanout_ticks;
 static int pwp_vdisp_pending;
 #ifdef PWP_EXPERIMENTAL_ZM2
-static uint32_t pwp_opm_acks;
+static uint32_t pwp_opm_acks,pwp_trap3_calls,pwp_trap3_last_fn;
 #endif
 #ifdef PWP_TAB5_MUSASHI
 int my_irqh_callback(int level) {
@@ -337,7 +337,7 @@ void pwp_mu_reset(void) {
   tsr_saved_ticks=tsr_saved_scans=tsr_saved_acks=0;
   tsr_boot_active=0;
   tsr_opm_isr_address=0;
-  pwp_opm_acks=0;
+  pwp_opm_acks=pwp_trap3_calls=pwp_trap3_last_fn=0;
   memset(tsr_gaiji,0,sizeof(tsr_gaiji));
 #endif
   pwp_guest_cycles=0;
@@ -1252,6 +1252,11 @@ int32_t pwp_mu_run(uint32_t max_instructions) {
     uint32_t pc=m68k_get_reg(NULL,M68K_REG_PC);
     if (!within(pc,2)) {state=-8;fault_addr=pc;break;}
     uint16_t op=u16(ram+pc);
+#ifdef PWP_EXPERIMENTAL_ZM2
+    if(tsr_status==2u && op==0x4e43u){
+      ++pwp_trap3_calls;pwp_trap3_last_fn=m68k_get_reg(NULL,M68K_REG_D1);
+    }
+#endif
     if ((op&0xff00u)==0xff00u || op==0x4e4fu) {
       blocked_at=pc;blocked_op=op;state=2;break;
     }
@@ -1420,4 +1425,9 @@ uint32_t pwp_mu_fm_rate(void){return pwp_ym2151_sample_rate();}
 uint32_t pwp_mu_fm_overflows(void){return pwp_ym2151_overflows();}
 uint32_t pwp_mu_opm_register_writes(void){return pwp_bus_opm_register_writes();}
 uint32_t pwp_mu_opm_acks(void){return pwp_opm_acks;}
+uint32_t pwp_mu_zmusic_trap3_calls(void){return pwp_trap3_calls;}
+uint32_t pwp_mu_zmusic_last_fn(void){return pwp_trap3_last_fn;}
+uint32_t pwp_mu_opm_keyons(void){return pwp_bus_opm_keyons();}
+uint32_t pwp_mu_opm_timer_commands(void){return pwp_bus_opm_timer_commands();}
+uint32_t pwp_mu_opm_register(uint32_t index){return pwp_bus_opm_register(index);}
 #endif
