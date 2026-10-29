@@ -8,6 +8,7 @@ import {resolve,basename} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createHash,webcrypto} from 'node:crypto';
 import {verifyZmusic208,bootRealZmusic208} from '../src/zmusic-resident.mjs';
+import {decodeGuestADPCMChain} from '../src/adpcm-msm6258.mjs';
 
 const [wasmPath,driverPath,panicPath,panPath]=process.argv.slice(2);
 if(!wasmPath||!driverPath||!panicPath||!panPath)
@@ -45,7 +46,7 @@ const stats={format:'PWP-ZM2-REAL-PAN-v2',mediaName,kind:expectedMedia.kind,driv
  panBytes:pan.length,resident,steps:0,guestCycles:0,ioCalls:0,readCalls:0,
  bytesDelivered:0,traps:0,dosHistogram:{},fmFrames:0,fmNonzero:0,adpcmBytesAtStart:m._pwp_mu_sound_bytes()>>>0,
  adpcmBytes:0,adpcmIOCSEventsAtStart:m._pwp_mu_audio_chain_calls()>>>0,
- adpcmIOCSEvents:0,
+ adpcmIOCSEvents:0,adpcmDecodedSamples:0,adpcmDecodedNonzero:0,adpcmDecodedBytes:0,
  fmChanges:0,fmOverflow:0,opmWritesAtStart:m._pwp_mu_opm_register_writes?.()??null,
  opmWritesAtEnd:0,opmIrqAcks:0,trap3Calls:0,trap3LastFn:0,
  opmKeyons:0,opmTimerCommands:0,opmRegisters:{},videoWrites:0,pixelWrites:0,
@@ -84,7 +85,20 @@ for(let slice=0;slice<MAX_SLICES;slice++){
     stats.traps++;
     const key=hex(op);stats.dosHistogram[key]=(stats.dosHistogram[key]??0)+1;
     if(stats.traps>MAX_TRAPS){stats.stop='trap-budget';break;}
+    const beforeAudioSerial=m._pwp_mu_audio_serial()>>>0;
     state=m._pwp_mu_dispatch();
+    if((m._pwp_mu_audio_serial()>>>0)!==beforeAudioSerial &&
+       (m._pwp_mu_audio_kind()>>>0)===3){
+      const pcm=decodeGuestADPCMChain(m.HEAPU8,
+        m._pwp_mu_audio_ram_ptr()>>>0,m._pwp_mu_audio_chain_addr()>>>0,
+        m._pwp_mu_audio_chain_count()>>>0,m._pwp_mu_audio_mode()>>>0);
+      stats.adpcmDecodedSamples+=pcm.samples.length/pcm.channels;
+      stats.adpcmDecodedBytes+=pcm.byteCount;
+      for(const v of pcm.samples){
+        if(!Number.isFinite(v))throw new Error('Actual guest ADPCM decoded non-finite PCM');
+        if(v!==0)stats.adpcmDecodedNonzero++;
+      }
+    }
   }
   while(state===3){
     const length=m._pwp_mu_io_length()>>>0;
@@ -138,7 +152,8 @@ if(expectedMedia.kind==='FM' && (stats.fmNonzero<1024 || stats.fmChanges<64 ||
    stats.opmWritesAtEnd<=stats.opmWritesAtStart))
   throw new Error('No sustained real YM2151 FM from '+mediaName);
 if(expectedMedia.kind==='ADPCM' &&
-   stats.adpcmBytes===0 && stats.adpcmIOCSEvents===0)
-  throw new Error('No original guest ADPCM transfer from '+mediaName);
+   (!stats.adpcmIOCSEvents || stats.adpcmDecodedBytes===0 ||
+    stats.adpcmDecodedSamples<128 || stats.adpcmDecodedNonzero<32))
+  throw new Error('Original guest ADPCM did not produce real decoded PCM from '+mediaName);
 if(stats.fmOverflow)throw new Error('Actual FM output samples were lost');
 console.log('PASS original ZMUSIC208.X + PANIC.X + '+mediaName+' visible output and '+expectedMedia.kind+' guest audio');
