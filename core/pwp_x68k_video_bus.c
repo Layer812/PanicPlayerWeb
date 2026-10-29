@@ -107,6 +107,9 @@ static void pwp_mfp_opm_line(int asserted);
 #include "pwp_x68k_audio_hw.inc"
 #include "pwp_x68k_dma3.inc"
 uint32_t pwp_bus_opm_latch(void){return opm_register_latch;}
+#ifdef PWP_EXPERIMENTAL_ZM2
+uint32_t pwp_bus_opm_register_writes(void){return pwp_zm2_opm_register_writes;}
+#endif
 uint32_t pwp_bus_opm_address_writes(void){return opm_address_writes;}
 uint32_t pwp_bus_opm_data_rejections(void){return opm_data_rejections;}
 uint32_t pwp_bus_sysport_contrast_writes(void){return sysport_contrast_writes;}
