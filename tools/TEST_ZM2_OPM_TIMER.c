@@ -39,8 +39,11 @@ int main(void){
     assert(!pwp_bus_mfp_opm_irq_ready());
     pwp_bus_audio_advance_cycles(256u);
     assert((status()&1u)!=0u && pwp_bus_mfp_opm_irq_ready());
-    opm(0x14u,0x30u); /* clear both flags and stop timers */
+    opm(0x14u,0x30u); /* clear YM flags and stop timers */
     assert((status()&3u)==0u);
+    /* MFP IPRB is an edge latch: clearing the OPM line does NOT ACK it. */
+    assert(pwp_bus_mfp_opm_irq_ready());
+    pwp_bus_mfp_opm_ack();
     assert(!pwp_bus_mfp_opm_irq_ready());
     /* Timer B = 255 => 1024 / 4 MHz = 4096 CPU cycles. */
     opm(0x12u,0xffu);
