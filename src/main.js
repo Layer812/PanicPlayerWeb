@@ -348,11 +348,11 @@ const result=await loadEngine({
   guestAudio:({kind,rate,bytes,chains,samples})=>{
     el['audio-status'].textContent=`ADPCM: ${kind} / ${rate} Hz / ${samples} 標本 / ${chains} 区間`;
   },
-  audioFrames:(samples,rate,channels)=>{
-    const ok=audio.enqueue(samples,rate,channels);
+  audioFrames:(samples,rate,channels,device='ADPCM')=>{
+    const ok=audio.enqueue(samples,rate,channels,device==='FM'?'FM':'default');
     el['audio-status'].textContent=ok
-      ?`音声：ADPCM ${rate}Hz / ${samples.length/channels}標本をPCM出力に渡しました`
-      :'音声：ADPCMは復号済み。ブラウザ音声が無効、または再生キューが満杯です。';
+      ?`音声：${device} ${rate}Hz / ${samples.length/channels}標本をPCM出力に渡しました`
+      :`音声：${device}は生成済み。ブラウザ音声が無効、または再生キューが満杯です。`;
     return ok;
   },
   finished:()=>{void finished();},
