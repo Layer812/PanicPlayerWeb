@@ -14,7 +14,8 @@ static uint32_t pwp_opm_status_reads,pwp_opm_ct_writes,pwp_opm_busy_rejects;
 static uint32_t pwp_adpcm_control_writes,pwp_adpcm_data_rejects;
 static uint8_t pwp_opm_ct, pwp_adpcm_playing, pwp_pia_port_c;
 #ifdef PWP_EXPERIMENTAL_ZM2
-/* Experimental, stateful YM2151 register file. NO AUDIO/TIMER OUTPUT. */
+/* Actual guest register state and cycle-based OPM timers. Waveforms are
+ * synthesized through a separate, pinned BSD ymfm component. */
 static uint8_t pwp_zm2_opm_registers[256];
 static uint32_t pwp_zm2_opm_register_writes;
 #include "pwp_ym2151_timer.inc"
@@ -58,6 +59,9 @@ void pwp_bus_audio_advance_cycles(uint32_t cycles) {
     else pwp_opm_busy_remaining-=cycles;
 #ifdef PWP_EXPERIMENTAL_ZM2
     pwp_zm2_timer_advance(cycles);
+#ifndef PWP_ZM2_TIMER_TEST
+    pwp_ym2151_advance(cycles);
+#endif
 #endif
 }
 static void pwp_audio_reset(void) {
@@ -69,6 +73,9 @@ static void pwp_audio_reset(void) {
     for(uint32_t i=0;i<256u;i++)pwp_zm2_opm_registers[i]=0u;
     pwp_zm2_opm_register_writes=0;
     pwp_zm2_timer_reset();
+#ifndef PWP_ZM2_TIMER_TEST
+    pwp_ym2151_reset();
+#endif
 #endif
     pwp_adpcm_playing=0;
     pwp_pia_port_c=0x0bu; /* PX68K PIA_Init() */
@@ -113,11 +120,14 @@ static int pwp_audio_write8(uint32_t addr,uint8_t value) {
 #ifndef PWP_EXPERIMENTAL_ZM2
         if(opm_register_latch!=0x1bu) {++opm_data_rejections;return 0;}
 #else
-        /* Record actual register writes and respect YM2151 BUSY timing.
-         * This state does not produce FM sound or timer interrupts yet. */
+        /* Actual YM2151 register write drives both FM synthesis and the
+         * guest-cycle-based timer/OPM IRQ model, without host-side music. */
         pwp_zm2_opm_registers[opm_register_latch]=value;
         ++pwp_zm2_opm_register_writes;
         pwp_zm2_timer_write(opm_register_latch,value);
+#ifndef PWP_ZM2_TIMER_TEST
+        pwp_ym2151_write(opm_register_latch,value);
+#endif
 #endif
         if(opm_register_latch==0x1bu){
             pwp_opm_ct=(uint8_t)((value>>6u)&3u);
