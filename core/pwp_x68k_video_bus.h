@@ -65,6 +65,9 @@ uint32_t pwp_bus_sysport_contrast_writes(void);
 uint32_t pwp_bus_opm_latch(void);
 #ifdef PWP_EXPERIMENTAL_ZM2
 uint32_t pwp_bus_opm_register_writes(void);
+uint32_t pwp_bus_opm_keyons(void);
+uint32_t pwp_bus_opm_timer_commands(void);
+uint32_t pwp_bus_opm_register(uint32_t index);
 #endif
 uint32_t pwp_bus_opm_address_writes(void);
 uint32_t pwp_bus_opm_data_rejections(void);
