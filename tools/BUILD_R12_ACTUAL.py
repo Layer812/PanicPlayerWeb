@@ -159,7 +159,9 @@ def compile_and_test(opts, source, x):
                 objects.append(obj)
             fm_exports=['pwp_mu_fm_pending','pwp_mu_fm_pop',
                         'pwp_mu_fm_rate','pwp_mu_fm_overflows',
-                        'pwp_mu_opm_register_writes','pwp_mu_opm_acks']
+                        'pwp_mu_opm_register_writes','pwp_mu_opm_acks',
+                        'pwp_mu_zmusic_trap3_calls','pwp_mu_zmusic_last_fn',
+                        'pwp_mu_opm_keyons','pwp_mu_opm_timer_commands','pwp_mu_opm_register']
             cmd=[emxx,'-O2',
                  '-sMODULARIZE=1','-sEXPORT_ES6=1','-sENVIRONMENT=web,worker,node',
                  '-sALLOW_MEMORY_GROWTH=1','-sINITIAL_MEMORY=33554432',
