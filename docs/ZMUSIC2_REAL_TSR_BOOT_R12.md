@@ -186,3 +186,13 @@ real 15.75 kHz H-SYNC on GPIP bit7 using elapsed 16 MHz *guest cycles*,
 preserving all other MFP bits, solely while the real driver preboots.
 The regular Pages runtime is unchanged. The authentic driver test also
 records the total elapsed cycles after the final interrupted call.
+
+## R25 real 8255 joystick input ports A/B
+
+Real ZMUSIC208.X passed the H-SYNC wait; next bus access at
+`$E9A001` failed (PC `$2484E0`, guest cycles 2,911,467).
+The X68000 8255 port A and B are read-only joystick input latches
+at `$E9A001/$E9A003`. With no buttons pressed, all active-low input
+lines read high (`$FF`). The experimental guest bus now permits
+these **read-only**, neutral-port reads; it still does not fabricate
+joystick presses or accept unsupported writes.
