@@ -3,7 +3,7 @@
 // Third-party components and .PAN media retain separate notices.
 /* Small PCM queue, purposely not an emulated sound chip. The guest core owns timing. */
 export class AudioOutput {
-  constructor() { this.context=null; this.cursor=0; this.volume=1; this.sources=new Set(); }
+  constructor() { this.context=null; this.cursor=0; this.streamCursors=new Map(); this.volume=1; this.sources=new Set(); }
   async enable() {
     this.context ??= new (window.AudioContext || window.webkitAudioContext)();
     if (this.context.state === 'suspended') await this.context.resume();
@@ -21,7 +21,7 @@ export class AudioOutput {
       return this.context?.state === 'running';
     } finally {clearTimeout(timer);}
   }
-  enqueue(interleaved, sampleRate, channels=2) {
+  enqueue(interleaved, sampleRate, channels=2, stream='default') {
     if (!this.context || this.context.state !== 'running') return false;
     if (!(interleaved instanceof Float32Array) || ![1,2].includes(channels) ||
         !Number.isInteger(sampleRate) || sampleRate < 8000 || sampleRate > 192000 ||
@@ -29,7 +29,12 @@ export class AudioOutput {
     const n = interleaved.length / channels;
     if (n === 0) return true;
     // Avoid runaway latency if browser tab is suspended or producer runs faster.
-    if (this.cursor > this.context.currentTime + .5) return false;
+    // Different guest sound devices share the AudioContext mixer but keep
+    // independent schedules. Serializing FM after an ADPCM buffer produces
+    // artificial silence and breaks their simultaneous playback.
+    const streamCursor=stream==='default'?this.cursor:
+      (this.streamCursors.get(stream)??this.context.currentTime);
+    if (streamCursor > this.context.currentTime + .5) return false;
     const buffer = this.context.createBuffer(channels, n, sampleRate);
     for (let channel=0; channel<channels; channel++) {
       const dest = buffer.getChannelData(channel);
@@ -38,16 +43,18 @@ export class AudioOutput {
     const node = this.context.createBufferSource();
     node.buffer = buffer;
     node.connect(this.context.destination);
-    const start = Math.max(this.context.currentTime + .015, this.cursor);
+    const start = Math.max(this.context.currentTime + .015, streamCursor);
     node.start(start);
     this.sources.add(node);
     node.onended=()=>this.sources.delete(node);
-    this.cursor = start + n/sampleRate;
+    if(stream==='default')this.cursor=start+n/sampleRate;
+    else this.streamCursors.set(stream,start+n/sampleRate);
     return true;
   }
   halt() {
     for(const node of this.sources){try{node.stop();}catch{}}
     this.sources.clear();
+    this.streamCursors.clear();
     this.cursor=this.context?.currentTime??0;
   }
   async pause(){if(this.context?.state==='running')await this.context.suspend();}
