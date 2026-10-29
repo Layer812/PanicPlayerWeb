@@ -230,3 +230,17 @@ guest's original 32 bytes through the existing bounded MSM6258 PLAY,
 DATA and RESET MMIO/FIFO hardware state. Arbitrary _ADPCMOUT requests
 remain unsupported. Real DMA DRQ timing and FM synthesis are still
 separate requirements for playback.
+
+## R29 gate: real _KEEPPR and post-resident TRAP #3 status call
+
+The authentic 56,310-byte ZMUSIC208.X completed DOS `$FF31 _KEEPPR`
+at PC `$2478A2` after 49 intercepted DOS/IOCS calls. The original
+PANIC guest context was restored to `PC=$10000` with driver handler
+vector $8C and real `ZmuSiC` v2 signature preserved in RAM.
+
+The acceptance test now starts a separate **real 68000 guest** consisting
+of `MOVEQ #$50,D1; TRAP #3; DOS _EXIT2`, invoking the original driver's
+`zm_status` command. It requires the real handler and an A0 status-work
+pointer inside the retained driver memory, then successful guest exit.
+No synthetic TRAP callback, fake identification or host-invented status.
+Only actual driver residency + real API execution can pass the CI gate.

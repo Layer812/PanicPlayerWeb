@@ -16,9 +16,12 @@ const put=data=>{
   assert.ok(data.length<=(wasm._pwp_mu_stage_capacity()>>>0));
   wasm.HEAPU8.set(data,pos);
 };
-const hu=new Uint8Array(68);
-hu[0]=0x48;hu[1]=0x55;new DataView(hu.buffer).setUint32(12,4,false);
-hu.set([0x70,0x2a,0xff,0x4c],64);
+/* PANIC-side probe runs after genuine _KEEPPR: MOVEQ #$50,D1;
+ * TRAP #3 (actual Z-MUSIC zm_status); then DOS _EXIT2.
+ * No injected trap handler or host-side status fabrication. */
+const hu=new Uint8Array(72);
+hu[0]=0x48;hu[1]=0x55;new DataView(hu.buffer).setUint32(12,8,false);
+hu.set([0x72,0x50,0x4e,0x43,0xff,0x4c,0x4e,0x71],64);
 put(hu);assert.equal(wasm._pwp_mu_load(hu.length),1);
 put(file);
 const begun=wasm._pwp_mu_tsr_begin(file.length);
@@ -90,6 +93,32 @@ const result={driver:'AUTHENTIC_ZMUSIC208.X',guestCpu:'REAL_MUSASHI',
   totalGuestCycles:wasm._pwp_mu_guest_cycles(),
   stalledOnPpi:false,
   note:'Not a Z-MUSIC playback pass unless real _KEEPPR and guest trap-vector signature are confirmed'};
+if(completed) {
+  const handler=wasm._pwp_mu_guest_peek32(0x8c)>>>0;
+  let state=1, spins=0;
+  for(;spins<512;spins++){
+    state=wasm._pwp_mu_run(512);
+    if(state!==1)break;
+  }
+  const op=state===2 ? (wasm._pwp_mu_trap()>>>0) : 0;
+  const statusPtr=wasm._pwp_mu_register(8)>>>0; // A0 from real zm_status
+  result.trap3Probe={
+    driverHandler:'0x'+handler.toString(16),
+    returnedOp:'0x'+op.toString(16),
+    statusPointer:'0x'+statusPtr.toString(16),
+    state,spins,
+    passed:handler>=0x240000 && handler<0x3c0000 &&
+           state===2 && op===0xff4c &&
+           statusPtr>=0x240000 && statusPtr<0x3c0000
+  };
+  if(result.trap3Probe.passed){
+    const exit=wasm._pwp_mu_dispatch();
+    result.trap3Probe.guestExitStatus=exit;
+    result.trap3Probe.passed=exit===4;
+  }
+}
 console.log('ZMUSIC REAL BOOT EVIDENCE '+JSON.stringify(result));
-if(!completed && (status<0 || status===4 || calls<48))process.exitCode=2;
-// CPU faults and unsupported MMIO now fail, regardless of previous call count.
+if(!completed || !result.initialized || !result.trap3Probe?.passed ||
+   status<0 || status===4)process.exitCode=2;
+// The CI gate now requires the ACTUAL signed-on ZMUSIC208.X and a working
+// guest TRAP #3 status query, not merely reaching some DOS/IOCS calls.
