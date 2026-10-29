@@ -196,3 +196,14 @@ at `$E9A001/$E9A003`. With no buttons pressed, all active-low input
 lines read high (`$FF`). The experimental guest bus now permits
 these **read-only**, neutral-port reads; it still does not fabricate
 joystick presses or accept unsupported writes.
+
+## R26 authentic IOCS _DMAMOVE copied voice table
+
+With read-only PPI port A/B, authentic ZMUSIC208.X proceeds to the
+original `trans_dma` at `PC=$247766`, IOCS `$8A _DMAMOVE`.
+The isolated virtual DMA engine now executes **actual guest RAM byte
+copies** for mode `$05` (A1++ source, A2++ destination) and up to
+`$FF00` bytes, with both pointers/length checked before modification.
+Other DMA modes and MMIO transfers remain unsupported; no fake success.
+The CI proof must pass this first native DMA service and show its real
+D1/D2/A1/A2 registers and next service or full _KEEPPR.

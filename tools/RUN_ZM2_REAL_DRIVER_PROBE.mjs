@@ -35,6 +35,12 @@ for(let i=0;i<20000;i++){
     const pc=wasm._pwp_mu_pc()>>>0;
     last={op:'0x'+op.toString(16),fn:'0x'+(d0&255).toString(16),
           pc:'0x'+pc.toString(16),cycles:wasm._pwp_mu_guest_cycles()};
+    if(op===0x4e4f && (d0&255)===0x8a){
+      last.dma={mode:wasm._pwp_mu_register(1)&255,
+        bytes:wasm._pwp_mu_register(2)>>>0,
+        source:'0x'+(wasm._pwp_mu_register(9)>>>0).toString(16),
+        destination:'0x'+(wasm._pwp_mu_register(10)>>>0).toString(16)};
+    }
     if(op===0xff1e){
       const sp=wasm._pwp_mu_register(15)>>>0;
       const ptr=wasm._pwp_mu_guest_peek32(sp)>>>0;
@@ -79,4 +85,4 @@ const result={driver:'AUTHENTIC_ZMUSIC208.X',guestCpu:'REAL_MUSASHI',
   stalledOnPpi:false,
   note:'Not a Z-MUSIC playback pass unless real _KEEPPR and guest trap-vector signature are confirmed'};
 console.log('ZMUSIC REAL BOOT EVIDENCE '+JSON.stringify(result));
-if(!completed && (status===4 || calls<42))process.exitCode=2; // actual driver must advance beyond its last observed output; a premature exit is failure
+if(!completed && (status===4 || calls<44))process.exitCode=2; // must pass first authentic _DMAMOVE; prematurely exiting is not resident

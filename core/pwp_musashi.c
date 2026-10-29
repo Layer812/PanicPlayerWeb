@@ -680,6 +680,19 @@ int32_t pwp_mu_dispatch(void) {
   if(blocked_op==0x4e4fu) {
     const uint32_t fn=m68k_get_reg(NULL,M68K_REG_D0)&0xffu;
 #ifdef PWP_EXPERIMENTAL_ZM2
+    if(tsr_boot_active && fn==0x8au) { /* Real IOCS _DMAMOVE: safe byte DMA. */
+      const uint32_t mode=m68k_get_reg(NULL,M68K_REG_D1)&0xffu;
+      const uint32_t n=m68k_get_reg(NULL,M68K_REG_D2);
+      const uint32_t source=m68k_get_reg(NULL,M68K_REG_A1);
+      const uint32_t dest=m68k_get_reg(NULL,M68K_REG_A2);
+      /* Physical DMA direction: D1=$05 means A1++ to A2++.
+       * Real Z-MUSIC uses it for bulk initialization of the voice table.
+       * Do not pretend unsupported fixed/descending transfer modes work. */
+      if(mode!=5u || !n || n>0xff00u ||
+         !within(source,n) || !within(dest,n))return state=-18;
+      memmove(ram+dest,ram+source,n);
+      complete_dos(0);return state;
+    }
     if(tsr_boot_active && fn==0x6au) { /* IOCS _OPMINTST: register REAL guest ISR. */
       const uint32_t handler=m68k_get_reg(NULL,M68K_REG_A1);
       if(handler && ((handler&1u)||!within(handler,2u)))return state=-18;
