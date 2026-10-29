@@ -37,7 +37,8 @@ const stats={format:'PWP-ZM2-REAL-PAN-v1',driverReal:true,panOriginal:true,
  panBytes:pan.length,resident,steps:0,guestCycles:0,ioCalls:0,readCalls:0,
  bytesDelivered:0,traps:0,dosHistogram:{},fmFrames:0,fmNonzero:0,
  fmChanges:0,fmOverflow:0,opmWritesAtStart:m._pwp_mu_opm_register_writes?.()??null,
- opmWritesAtEnd:0,opmIrqAcks:0,videoWrites:0,pixelWrites:0,
+ opmWritesAtEnd:0,opmIrqAcks:0,trap3Calls:0,trap3LastFn:0,
+ opmKeyons:0,opmTimerCommands:0,opmRegisters:{},videoWrites:0,pixelWrites:0,
  firstVisible:false,scanouts:0,lastPC:0,lastFault:0,lastStatus:1,stop:'budget'};
 const MAX_SLICES=16000,MAX_TRAPS=4000,MAX_BYTES=32*1024*1024;
 let lastSample=0,everSample=false,nonzeroScan=false,state=1;
@@ -103,6 +104,12 @@ stats.guestCycles=m._pwp_mu_guest_cycles()>>>0;
 stats.readCalls=m._pwp_mu_pan_read_calls()>>>0;
 stats.opmWritesAtEnd=m._pwp_mu_opm_register_writes()>>>0;
 stats.opmIrqAcks=m._pwp_mu_opm_acks()>>>0;
+stats.trap3Calls=m._pwp_mu_zmusic_trap3_calls()>>>0;
+stats.trap3LastFn=m._pwp_mu_zmusic_last_fn()>>>0;
+stats.opmKeyons=m._pwp_mu_opm_keyons()>>>0;
+stats.opmTimerCommands=m._pwp_mu_opm_timer_commands()>>>0;
+for(const i of [0x08,0x10,0x11,0x12,0x14,0x20,0x21,0x22,0x23,0x28,0x30])
+ stats.opmRegisters[hex(i)]=m._pwp_mu_opm_register(i)>>>0;
 stats.fmOverflow=m._pwp_mu_fm_overflows()>>>0;
 stats.lastPC=m._pwp_mu_pc()>>>0;
 stats.lastFault=m._pwp_mu_fault_address()>>>0;
