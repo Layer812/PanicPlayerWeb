@@ -730,9 +730,13 @@ int32_t pwp_mu_dispatch(void) {
     if(tsr_boot_active && fn==0x6au) { /* IOCS _OPMINTST: register REAL guest ISR. */
       const uint32_t handler=m68k_get_reg(NULL,M68K_REG_A1);
       if(handler && ((handler&1u)||!within(handler,2u)))return state=-18;
+      /* _OPMINTST installs the authentic guest handler into MFP vector
+       * $43 at $10C. Earlier code only remembered A1 in host state, leaving
+       * the guest vector pointed at IPL ROM, so real Timer B could never
+       * drive Z-MUSIC's sequencer. Do NOT call the handler from host code:
+       * Musashi's real IRQ acknowledge fetches this actual 68000 vector. */
       tsr_opm_isr_address=handler;
-      /* Registration does not fabricate a YM2151 interrupt; timer-based
-       * delivery still requires a genuine OPM timer peripheral. */
+      w32(ram+0x10cu,handler ? handler : 0x00ff0000u);
       complete_dos(0);return state;
     }
     if(tsr_boot_active && fn==0x81u) { /* IOCS _B_SUPER: real SR/stack banks. */
