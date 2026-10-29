@@ -96,6 +96,9 @@ static uint32_t sysport_contrast_writes;
 #define OPM_DATA_PORT 0x00e90003u
 static uint8_t opm_register_latch;
 static uint32_t opm_address_writes,opm_data_rejections;
+#ifdef PWP_EXPERIMENTAL_ZM2
+static void pwp_mfp_opm_line(int asserted);
+#endif
 #include "pwp_x68k_audio_hw.inc"
 #include "pwp_x68k_dma3.inc"
 uint32_t pwp_bus_opm_latch(void){return opm_register_latch;}
@@ -155,6 +158,9 @@ static uint8_t mfp_ierb, mfp_imrb;
 static uint32_t mfp_read_ierb, mfp_read_imrb;
 static uint32_t mfp_last_read;
 static uint8_t mfp_gpip4_active;
+#ifdef PWP_EXPERIMENTAL_ZM2
+static uint8_t mfp_opm_line;
+#endif
 static uint32_t mfp_gpip_reads;
 
 
@@ -185,6 +191,9 @@ void pwp_bus_reset(void) {
     mfp_read_ierb=mfp_read_imrb=mfp_last_read=0;
     mfp_gpip_reads=0;
     mfp_gpip4_active=1;  /* Power-on: active display phase. */
+#ifdef PWP_EXPERIMENTAL_ZM2
+    mfp_opm_line=0; /* YM IRQ line idle (electrical high) */
+#endif
     sysport4_write_control=0u; /* no guest keyboard transmit enabled */
     sysport_contrast=sysport_monitor=0u;
     sysport_contrast_writes=0;
@@ -497,7 +506,11 @@ int pwp_bus_read8(uint32_t addr, uint8_t *out) {
          * compare; H-SYNC bit7 held high in this V-DISP-only subset.
          * Only bit4 carries time-accurate behavior. Other GPIP sources
          * are deliberately not presented as fully implemented. */
-        *out=(uint8_t)(0xe3u | (mfp_gpip4_active ? 0x10u : 0u));
+        *out=(uint8_t)(0xe3u | (mfp_gpip4_active ? 0x10u : 0u)
+#ifdef PWP_EXPERIMENTAL_ZM2
+             | (mfp_opm_line ? 0u : 0x08u)
+#endif
+             );
         ++mfp_gpip_reads; mfp_last_read=addr;
         return 1;
     }
@@ -559,11 +572,29 @@ int pwp_bus_write8(uint32_t addr,uint8_t value) {
      * delivery remains unsupported; writes do not fabricate interrupts. */
     if(addr==MFP_IERB_ADDRESS){
         mfp_ierb=value;
-        mfp_iprb &= (uint8_t)(value | 0xbfu); /* disabled V-DISP drops IPRB6 */
+#ifdef PWP_EXPERIMENTAL_ZM2
+        mfp_iprb &= (uint8_t)(value | 0xb7u);
+#else
+        mfp_iprb &= (uint8_t)(value | 0xbfu);
+#endif /* disabled V-DISP drops IPRB6 */
         return 1;
     }
-    if(addr==MFP_IPRB_ADDRESS){mfp_iprb &= (uint8_t)(value | 0xbfu);return 1;}
-    if(addr==MFP_ISRB_ADDRESS){mfp_isrb &= (uint8_t)(value | 0xbfu);return 1;}
+    if(addr==MFP_IPRB_ADDRESS){
+#ifdef PWP_EXPERIMENTAL_ZM2
+        mfp_iprb &= (uint8_t)(value | 0xb7u);
+#else
+        mfp_iprb &= (uint8_t)(value | 0xbfu);
+#endif
+        return 1;
+    }
+    if(addr==MFP_ISRB_ADDRESS){
+#ifdef PWP_EXPERIMENTAL_ZM2
+        mfp_isrb &= (uint8_t)(value | 0xb7u);
+#else
+        mfp_isrb &= (uint8_t)(value | 0xbfu);
+#endif
+        return 1;
+    }
     if(addr==MFP_IMRB_ADDRESS){mfp_imrb=value;return 1;}
     if(addr>=SPR_ATTR_BASE && addr<SPR_ATTR_END){sprite_attrs[addr-SPR_ATTR_BASE]=value;writes++;sprite_attr_writes++;return 1;}
     if(addr>=SPR_CTRL_BASE && addr<SPR_CTRL_END){sprite_ctrl[addr-SPR_CTRL_BASE]=value;writes++;return 1;}
@@ -647,3 +678,17 @@ uint32_t pwp_bus_mfp_vdisp_latched(void){return (mfp_iprb&0x40u)!=0u;}
 uint32_t pwp_bus_mfp_ierb_reads(void){return mfp_read_ierb;}
 uint32_t pwp_bus_mfp_imrb_reads(void){return mfp_read_imrb;}
 uint32_t pwp_bus_mfp_last_read_address(void){return mfp_last_read;}
+
+#ifdef PWP_EXPERIMENTAL_ZM2
+/* YM2151 open-drain IRQ falling edge -> MC68901 GPIP3, vector $43.
+ * Only a real timer-status transition may assert this line. */
+static void pwp_mfp_opm_line(int asserted){
+    const uint8_t next=(uint8_t)!!asserted;
+    if(!mfp_opm_line && next && (mfp_ierb&0x08u))mfp_iprb|=0x08u;
+    mfp_opm_line=next;
+}
+uint32_t pwp_bus_mfp_opm_irq_ready(void){
+    return ((mfp_ierb&mfp_imrb&mfp_iprb)&0x08u) && !(mfp_isrb&0x08u);
+}
+void pwp_bus_mfp_opm_ack(void){mfp_iprb &= (uint8_t)~0x08u;}
+#endif
