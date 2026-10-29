@@ -1,6 +1,6 @@
 # Z-MUSIC 2.08: R12 experimental real-CPU TSR preboot
 
-Status: **CPU boot prototype; NOT resident production driver or audio playback**.
+Status: **experimental real original Z-MUSIC 2.08 resident + YM2151 waveform bridge; end-to-end denkozm.pan playback NOT yet verified; production unchanged**.
 
 ## What runs
 With `--experimental-zmusic` only, the real pinned Tab5-derived Musashi
