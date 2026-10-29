@@ -47,6 +47,11 @@ def build(root: Path, destination: Path, original_docs: Path) -> list[str]:
     for f in ("panic.doc", "panic.his"):
         if not (original_docs / f).is_file():
             raise RuntimeError(f"Missing original PANIC documentation: {f}")
+    ymfm_license = root / "_ymfm" / "LICENSE"
+    if not ymfm_license.is_file() or b"BSD 3-Clause License" not in ymfm_license.read_bytes():
+        raise RuntimeError("Bundled YM2151 WASM requires complete BSD-3-Clause license")
+    if not (root / "core" / "pwp_ym2151_ymfm.cpp").is_file():
+        raise RuntimeError("Expected genuine YM2151 integration source missing")
     with tempfile.TemporaryDirectory(prefix="pwp_pages_") as tmp:
         stage = Path(tmp) / "site"
         stage.mkdir()
@@ -71,6 +76,7 @@ def build(root: Path, destination: Path, original_docs: Path) -> list[str]:
         if not musashi_softfloat.is_file():
             raise RuntimeError("Original SoftFloat licensing material is missing")
         shutil.copy2(musashi_softfloat, stage / "legal" / "SoftFloat_README.txt")
+        shutil.copy2(ymfm_license, stage / "legal" / "ymfm_LICENSE.txt")
         (stage / "legal" / "Musashi_LICENSE.txt").write_text(
             "Musashi Motorola 680x0 Emulator\n"
             "Copyright Karl Stenerud. All rights reserved.\n\n"
@@ -90,6 +96,10 @@ def build(root: Path, destination: Path, original_docs: Path) -> list[str]:
             "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n",
             encoding="utf-8")
         (stage / ".nojekyll").write_text("", encoding="ascii")
+        # Runtime ZMUSIC208.X is fetched on users' own browsers from the
+        # pinned upstream and hash checked, not bundled by Pages.
+        if list(stage.rglob("ZMUSIC208.X")):
+            raise RuntimeError("Pages must not bundle the Z-MUSIC executable")
         # Gate the copied runtime AGAIN; never publish partial or stale artifacts.
         if _sha((stage / "core" / "PANIC.X").read_bytes()) != PANIC_SHA256:
             raise RuntimeError("Staged PANIC.X hash mismatch")
