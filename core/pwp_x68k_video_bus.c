@@ -7,6 +7,11 @@
  * PX68K's little-endian-host `^1` transform. Unsupported MMIO fails closed.
  */
 #include "pwp_x68k_video_bus.h"
+#ifdef PWP_EXPERIMENTAL_ZM2
+#ifndef PWP_ZM2_TIMER_TEST
+#include "pwp_ym2151_bridge.h"
+#endif
+#endif
 #include <stddef.h>
 #define GVBASE 0xc00000u
 #define GVLEN 0x200000u
