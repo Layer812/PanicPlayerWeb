@@ -38,6 +38,12 @@ Windows development command:
 py -3 tools\START_PLAY.py --source "G:\X68KTab5" --pan "G:\MyPAN\example.PAN"
 ```
 
+## Tool used to create PAN works
+
+Some PAN works were created with **[panicCreationKit](https://github.com/yagennankoz/panicCreationKit)** by **Nankotsu (yagennankoz)**, a toolkit for generating X68000 PANIC `.PAN` files from image sequences, video, and audio, including support for Z-MUSIC-based FM sound.
+
+Many thanks to Nankotsu for making this creation toolkit available. This is an *authoring tool*, not a component bundled into the Panic Player playback engine.
+
 ## Copyright and acknowledgments
 
 - **Original Panic Player Web code:** © 2026 Layer812
