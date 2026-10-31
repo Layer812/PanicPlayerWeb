@@ -82,3 +82,30 @@ PANICとX68000の文化を支え、貴重なデータを保存されてきた皆
 FMの音声合成には[Aaron Giles氏のymfm](https://github.com/aaronsgiles/ymfm)（BSD-3-Clause）を使用しています。実際のYM2151波形を合成しており、音楽を録音した音声ファイルを埋め込む方式ではありません。原版Z-MUSIC v2.08の著作権者は**西川善司氏**です。本サイトはZ-MUSIC実行形式を配布物に同梱せず、固定された公開元から取得・照合して動作させます。通信に失敗した場合、Z-MUSICを使うPANの再生はできません。
 
 著作権と配布条件は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)、[ymfmライセンス（公開サイト）](https://layer812.github.io/PanicPlayerWeb/legal/ymfm_LICENSE.txt) を参照してください。個別PANの権利は各作者に帰属します。
+
+## デンコ（仮称）の漫画
+
+「このPanic Player関連の営みが、もし『電脳倶楽部』の企画だったら？」という仮想空間を舞台にした漫画を掲載しています。
+
+**現在は -1 ～ 4 を公開中**。**5 ～ 8 は順次追加予定**です。
+
+漫画の中でたびたび登場する **「FM音源で歌うPanic」** は、ここからブラウザでも再生できます。**[「FM音源で歌うPanic」を見る・再生する](https://layer812.github.io/PanicPlayerWeb/?pan=DENKOSN)**
+
+サムネイルをクリックすると漫画を原寸で開けます。画像は関連プロジェクトの [PanicPlayerTab5](https://github.com/Layer812/PanicPlayerTab5) と共通です。
+
+※実際の「電脳倶楽部」による公式企画・公式作品ではなく、架空の設定に基づく創作です。
+
+<table>
+<tr>
+  <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko-1.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko-1.png" alt="デンコ（仮称）漫画 -1" width="185"></a><p><strong>-1</strong></p></td>
+  <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko0.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko0.png" alt="デンコ（仮称）漫画 0" width="185"></a><p><strong>0</strong></p></td>
+  <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko1.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko1.png" alt="デンコ（仮称）漫画 1" width="185"></a><p><strong>1</strong></p></td>
+</tr>
+<tr>
+  <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko2.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko2.png" alt="デンコ（仮称）漫画 2" width="185"></a><p><strong>2</strong></p></td>
+  <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko3.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko3.png" alt="デンコ（仮称）漫画 3" width="185"></a><p><strong>3</strong></p></td>
+  <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko4.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko4.png" alt="デンコ（仮称）漫画 4" width="185"></a><p><strong>4</strong></p></td>
+</tr>
+</table>
+
+※漫画作品とPANIC.Xおよび個々の `.PAN` ファイルでは、権利・配布条件がそれぞれ異なります。

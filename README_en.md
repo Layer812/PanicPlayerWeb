@@ -65,3 +65,30 @@ The public browser edition now runs authentic **Z-MUSIC SYSTEM v2.08** resident 
 Press **PLAY** to unlock browser audio; autoplay may require a click. FM synthesis uses Aaron Giles' **ymfm** under BSD-3-Clause (license included in the published WASM site). Original Z-MUSIC is © **Zenji Nishikawa**. Its original executable is not bundled: the browser downloads exactly a fixed, hash-verified copy from a published third-party project when the player starts.
 
 Source credits, original author notices, and licensing links are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). All PAN artworks and music remain the property of their authors.
+
+## Denko (working title) — Comic
+
+What if the activities surrounding Panic Player were a project of **Den-no Club (電脳倶楽部)**? This independent comic explores an imaginary world based on that premise.
+
+**Episodes -1 through 4** are available; **5 through 8** are planned.
+
+The **“FM音源で歌うPanic” (FM-singing PANIC)** featured throughout the comic can also be played in your browser: **[Play FM音源で歌うPanic](https://layer812.github.io/PanicPlayerWeb/?pan=DENKOSN)**.
+
+Click a thumbnail to open its full-size comic page. The images are shared from the related [PanicPlayerTab5](https://github.com/Layer812/PanicPlayerTab5) repository.
+
+*This is a fictional independent project, not an official Den-no Club publication.*
+
+<table>
+<tr>
+  <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko-1.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko-1.png" alt="Denko (working title) comic episode -1" width="185"></a><p><strong>-1</strong></p></td>
+  <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko0.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko0.png" alt="Denko (working title) comic episode 0" width="185"></a><p><strong>0</strong></p></td>
+  <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko1.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko1.png" alt="Denko (working title) comic episode 1" width="185"></a><p><strong>1</strong></p></td>
+</tr>
+<tr>
+  <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko2.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko2.png" alt="Denko (working title) comic episode 2" width="185"></a><p><strong>2</strong></p></td>
+  <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko3.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko3.png" alt="Denko (working title) comic episode 3" width="185"></a><p><strong>3</strong></p></td>
+  <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko4.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko4.png" alt="Denko (working title) comic episode 4" width="185"></a><p><strong>4</strong></p></td>
+</tr>
+</table>
+
+The comic pages are separate creative works; PANIC.X and individual .PAN distribution terms do not automatically apply to them.
