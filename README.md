@@ -93,7 +93,7 @@ FMの音声合成には[Aaron Giles氏のymfm](https://github.com/aaronsgiles/ym
 
 「このPanic Player関連の営みが、もし『電脳倶楽部』の企画だったら？」という仮想空間を舞台にした漫画を掲載しています。
 
-**現在は -1 ～ 4 を公開中**。**5 ～ 8 は順次追加予定**です。
+**現在は -1 ～ 5 を公開中**。**6 ～ 8 は順次追加予定**です。
 
 漫画の中でたびたび登場する **「FM音源で歌うPanic」** は、ここからブラウザでも再生できます。**[「FM音源で歌うPanic」を見る・再生する](https://layer812.github.io/PanicPlayerWeb/?pan=DENKOSN)**
 
@@ -111,6 +111,11 @@ FMの音声合成には[Aaron Giles氏のymfm](https://github.com/aaronsgiles/ym
   <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko2.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko2.png" alt="デンコ（仮称）漫画 2" width="185"></a><p><strong>2</strong></p></td>
   <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko3.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko3.png" alt="デンコ（仮称）漫画 3" width="185"></a><p><strong>3</strong></p></td>
   <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko4.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko4.png" alt="デンコ（仮称）漫画 4" width="185"></a><p><strong>4</strong></p></td>
+</tr>
+<tr>
+  <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko5.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko5.png" alt="デンコ（仮称）漫画 5" width="185"></a><p><strong>5</strong></p></td>
+  <td></td>
+  <td></td>
 </tr>
 </table>
 
