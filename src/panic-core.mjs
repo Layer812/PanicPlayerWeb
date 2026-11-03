@@ -10,6 +10,7 @@
 import {verifyPanicX} from './hu-startup-probe.mjs';
 import {fetchVerifiedZmusic208,bootRealZmusic208} from './zmusic-resident.mjs';
 import {makeGuestClockLimiter, EMULATED_68000_HZ} from './guest-clock.mjs';
+import {createForegroundVisibilityGate} from './foreground-visibility.mjs';
 import {matchMissingPalette0} from './pan-palette-evidence.mjs';
 import {decodeGuestADPCMChain,decodeNibble6258,directADPCMSampleRate} from './adpcm-msm6258.mjs';
 
@@ -73,7 +74,9 @@ export async function checkPanicSha256(hu, subtle = globalThis.crypto?.subtle) {
   return true;
 }
 
-export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}={}) {
+export function createMusashiBridge(m, host, hu, {
+  experimentalZmusicBytes=null, visibilityDocument=globalThis.document,
+}={}) {
   if (!(m?.HEAPU8 instanceof Uint8Array)) throw new Error('Actual WASM heap unavailable');
   for (const name of REQUIRED) if (typeof m[name] !== 'function') {
     throw new Error(`Actual Musashi WASM missing ${name}`);
@@ -127,6 +130,19 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
   if (typeof m._pwp_mu_scanout_ticks === 'function' && !guestCycleClock)
     throw new Error('FIX24 requires real guest-cycle export from Musashi WASM');
   let meterWall=0, meterCycles=0, measuredMHz=0, lastTelemetryWall=0;
+  const visibilityGate=createForegroundVisibilityGate({
+    doc:visibilityDocument,
+    onResume:()=>{
+      if(!active || stopped)return;
+      // Hidden rAF callbacks may stop the guest for minutes. On return,
+      // resume at normal CPU speed; never turbo-execute hidden-time debt.
+      // RTC IOCS remains real wall time, so CLKCAT displays the current time.
+      guestCycleClock?.resume();
+      meterWall=clockMs();meterCycles=m._pwp_mu_guest_cycles?.()>>>0 || 0;
+      measuredMHz=0;
+      lastPresentedWall=clockMs();
+    },
+  });
   // Timing work counters, collected in the NORMAL player (no special
   // diagnostic build). CPU time and host waits never add to guest cycles.
   let profileCpuMs=0, profilePaceMs=0, profilePaintMs=0, profileSlices=0;
@@ -301,6 +317,9 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
     return true;
   };
   const presentScanoutIfDue = () => {
+    // Hidden browser tabs cannot display frames. Do not enqueue stale
+    // Canvas presentations or notify the UI for each virtual scanout.
+    if(visibilityGate.isHidden())return false;
     const nowMs=clockMs();
     const lateMs=guestCycleClock?.lateMs()??0;
     if (!shouldPresentScanout({lateMs,firstVisible:firstVisiblePaint,
@@ -394,6 +413,7 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
   // A task yield still lets Canvas composite and STOP/input events run; do
   // not skip guest instructions, virtual V-DISP/IRQ, or output samples.
   const yieldAfterFrame = async () => {
+    if(visibilityGate.isHidden())return; // pump waits for foreground below
     const began=clockMs();
     try {
       if (preferFastPaintYield(measuredMHz))
@@ -411,6 +431,12 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
     try {
       sampleGuest('running');
       while (active && !stopped && session === runSession) {
+        if(visibilityGate.isHidden()) {
+          await visibilityGate.waitUntilVisible();
+          if(!active || stopped || session!==runSession)return;
+          lastEventLoopYieldMs=clockMs();
+          continue;
+        }
         // Bounded CPU slice: ensure browser UI can process input or STOP.
         // Small instruction batches bound the maximum wall-clock lead.
         // Unlike the previous 6,000-instruction burst + 60Hz frame wait,
@@ -479,7 +505,7 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
           // Process exits may precede the first modeled VBlank. Preserve the
           // final real guest screen only if there was never a visible frame.
           if (!firstPaint && presentGuestVideo(true)) await yieldAfterFrame();
-          if (session === runSession) { active = false; host.finished(); }
+          if (session === runSession) { active = false; visibilityGate.stop(); host.finished(); }
           return;
         }
         if (result !== 1) {
@@ -537,6 +563,7 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
       consumeFMSound();flushFMSound();
       sampleGuest('exception',e instanceof Error?e.message:String(e));
       active = false;
+      visibilityGate.stop();
       if (!stopped && session === runSession) host.error(e instanceof Error ? e.message : String(e));
     }
   };
@@ -603,6 +630,7 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
       stopped = false; active = true;
       const startCycles=m._pwp_mu_guest_cycles?.()??0;
       guestCycleClock?.reset(startCycles);
+      visibilityGate.start();
       meterWall=clockMs();meterCycles=startCycles;measuredMHz=0;lastTelemetryWall=0;
       profileCpuMs=0;profilePaceMs=0;profilePaintMs=0;profileSlices=0;
       skippedScanouts=0;lastPresentedWall=clockMs();
@@ -615,6 +643,7 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
       sampleGuest('stop');
       consumeFMSound();flushFMSound();
       stopped = true; active = false; session++;
+      visibilityGate.stop();
       // Terminate the current guest on its next yield; the next `load` resets it.
       // Do not await a pending host file read, which may be slow.
       selected = null;
@@ -626,7 +655,7 @@ export function createMusashiBridge(m, host, hu, {experimentalZmusicBytes=null}=
        * skip PAN frames, issue a synthetic timer edge, or restart playback. */
       return m._pwp_mu_queue_space() === 1;
     },
-    async dispose() {stopped = true; active = false; selected = null; session++;}
+    async dispose() {stopped = true; active = false; selected = null; session++;visibilityGate.stop();}
   };
 }
 
