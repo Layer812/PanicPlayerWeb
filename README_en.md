@@ -76,7 +76,7 @@ Source credits, original author notices, and licensing links are in [THIRD_PARTY
 
 What if the activities surrounding Panic Player were a project of **Den-no Club (電脳倶楽部)**? This independent comic explores an imaginary world based on that premise.
 
-**Episodes -1 through 6** are available; **7 through 8** are planned.
+**Episodes -1 through 7** are available; **episode 8** is planned.
 
 The **“FM音源で歌うPanic” (FM-singing PANIC)** featured throughout the comic can also be played in your browser: **[Play FM音源で歌うPanic](https://layer812.github.io/PanicPlayerWeb/?pan=DENKOSN)**.
 
@@ -98,7 +98,7 @@ Click a thumbnail to open its full-size comic page. The images are shared from t
 <tr>
   <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko5.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko5.png" alt="Denko (working title) comic episode 5" width="185"></a><p><strong>5</strong></p></td>
   <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko6.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko6.png" alt="Denko (working title) comic episode 6" width="185"></a><p><strong>6</strong></p></td>
-  <td></td>
+  <td align="center" width="33%"><a href="https://github.com/Layer812/PanicPlayerTab5/blob/main/denko7.png"><img src="https://raw.githubusercontent.com/Layer812/PanicPlayerTab5/main/denko7.png" alt="Denko (working title) comic episode 7" width="185"></a><p><strong>7</strong></p></td>
 </tr>
 </table>
 
