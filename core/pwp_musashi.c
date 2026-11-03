@@ -8,6 +8,7 @@
 #include <string.h>
 #include "m68k.h"
 #include "pwp_x68k_video_bus.h"
+#include "pwp_iocs_rtc.h"
 #ifdef PWP_EXPERIMENTAL_ZM2
 #include "pwp_hu_resident.h"
 #include "pwp_ym2151_bridge.h"
@@ -825,6 +826,31 @@ int32_t pwp_mu_dispatch(void) {
       adpcm_event_kind=3u; /* Chain-data event; do not mutate its source */
       ++adpcm_event_serial;++adpcm_chain_calls;
       complete_dos(0); /* D0 unspecified on hardware; caller cannot rely on it. */
+      return state;
+    }
+    if(fn==0x54u || fn==0x56u) { /* _DATEGET / _TIMEGET: host local RTC. */
+      /* Real PANIC.X still executes IOCS TRAP #15. Only the virtual
+       * clock service reads the browser's current civil time; never
+       * fabricate guest CPU cycles or video frames. */
+      const time_t wall=time(NULL);
+      const struct tm *local=localtime(&wall);
+      if(!local) return state;
+      if(fn==0x54u) {
+        /* IOCS _DATEGET: $0wYYMMDD BCD; weekday 0=Sunday. */
+        complete_dos((int32_t)pwp_iocs_date_bcd((uint32_t)(local->tm_year+1900),
+          (uint32_t)(local->tm_mon+1),(uint32_t)local->tm_mday,
+          (uint32_t)local->tm_wday));
+      } else {
+        /* IOCS _TIMEGET: $00hhmmss BCD. */
+        complete_dos((int32_t)pwp_iocs_time_bcd((uint32_t)local->tm_hour,
+          (uint32_t)local->tm_min,(uint32_t)local->tm_sec));
+      }
+      return state;
+    }
+    if(fn==0x57u) { /* _TIMEBIN: D1.L packed BCD to D0.L binary. */
+      const uint32_t bcd=m68k_get_reg(NULL,M68K_REG_D1);
+      if(!pwp_iocs_time_bcd_valid(bcd))return state;
+      complete_dos((int32_t)pwp_iocs_time_bin(bcd));
       return state;
     }
     if(fn==0x7fu) { /* Standard IOCS _ONTIME: guest-clock centiseconds and days. */

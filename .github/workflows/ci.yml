@@ -61,6 +61,15 @@ jobs:
           python tools/BUILD_R12_ACTUAL.py --x68ktab-root "$GITHUB_WORKSPACE/_x68ktab"
           test -s core/pwp_musashi.wasm
           test -s core/PANIC.X
+      - name: Obtain historical pinned FM PAN for isolated regression only
+        run: |
+          # This media was deleted from the published pan/ folder on 2026-10-31.
+          # Keep it in runner temp only; never restore it to the site tree.
+          curl --fail --location --silent --show-error --retry 3 \
+            "https://raw.githubusercontent.com/Layer812/PanicPlayerWeb/3ddb06520c22dba930a8f7d8c12ccdfac9c191e2/pan/denkofm.pan" \
+            --output "$RUNNER_TEMP/denkofm.pan"
+          test "$(git hash-object "$RUNNER_TEMP/denkofm.pan")" = "52aafdfc369501da1afdd632e1255c015ac34e72"
+
       - name: Real Musashi resident boot, verified ZMUSIC208.X (isolated; not deployed)
         run: |
           curl --fail --location --silent --show-error --retry 3 \
@@ -70,7 +79,7 @@ jobs:
           python tools/BUILD_R12_ACTUAL.py --x68ktab-root "$GITHUB_WORKSPACE/_x68ktab" \
             --experimental-zmusic --ymfm-root "$GITHUB_WORKSPACE/_ymfm" --zmusic-driver "$RUNNER_TEMP/ZMUSIC208.X" \
             --zmusic-pan "$GITHUB_WORKSPACE/pan/denkozm.pan" \
-            --regression-pan "$GITHUB_WORKSPACE/pan/denkofm.pan" \
+            --regression-pan "$RUNNER_TEMP/denkofm.pan" \
             --regression-pan "$GITHUB_WORKSPACE/pan/denkopcm.pan" \
             --experimental-preview-dir "$GITHUB_WORKSPACE/_preview_stage/core"
 
